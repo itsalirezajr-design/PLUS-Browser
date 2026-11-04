@@ -1,0 +1,1 @@
+<resources><style name="PlusTheme" parent="android:style/Theme.Material.NoActionBar"><item name="android:windowBackground">@color/icon_background</item><item name="android:windowActionModeOverlay">true</item></style></resources>

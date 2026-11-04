@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp" android:height="100dp"
+    android:viewportWidth="100" android:viewportHeight="100">
+    <!-- A flat, transparent master mark: a single sweeping ribbon, P, and gold plus. -->
+    <path android:pathData="M17,77 C3,67 9,54 21,45 C30,38 39,34 49,30 C37,38 26,44 20,52 C12,61 11,69 17,77 Z">
+        <aapt:attr name="android:fillColor"><gradient android:startX="10" android:startY="69" android:endX="46" android:endY="29" android:type="linear" android:startColor="#CF22F8" android:endColor="#6928FF" /></aapt:attr>
+    </path>
+    <path android:pathData="M66,12 C88,8 96,19 87,33 C80,43 66,49 54,51 C70,44 82,37 85,27 C88,20 81,14 66,12 Z">
+        <aapt:attr name="android:fillColor"><gradient android:startX="70" android:startY="14" android:endX="77" android:endY="47" android:type="linear" android:startColor="#8F38FF" android:centerColor="#E621F5" android:endColor="#762DFF" /></aapt:attr>
+    </path>
+    <path android:fillType="evenOdd" android:pathData="M26,12 L63,12 C82,12 88,23 80,36 C75,46 63,51 48,51 L36,51 L30,72 L12,88 Z M39,23 L35,40 L54,40 C64,40 69,36 71,31 C73,26 70,23 63,23 Z">
+        <aapt:attr name="android:fillColor"><gradient android:startX="25" android:startY="10" android:endX="65" android:endY="71" android:type="linear" android:startColor="#35E8FF" android:centerColor="#006CFF" android:endColor="#5435F8" /></aapt:attr>
+    </path>
+    <path android:pathData="M26,12 L39,23 L35,40 L21,54 Z" android:fillColor="#54E9FF" android:fillAlpha="0.55"/>
+    <path android:pathData="M21,54 L35,40 L30,72 L12,88 Z" android:fillColor="#063DBF" android:fillAlpha="0.48"/>
+    <path android:pathData="M26,12 L63,12 C82,12 88,23 80,36" android:fillColor="@android:color/transparent" android:strokeColor="#8CEFFF" android:strokeAlpha="0.9" android:strokeWidth="1.2"/>
+    <path android:pathData="M18,64 L12,88 L30,72" android:fillColor="@android:color/transparent" android:strokeColor="#976BFF" android:strokeAlpha="0.9" android:strokeWidth="1"/>
+    <path android:pathData="M66,60 L75,60 L73.5,69 L82.5,69 L81,78 L72,78 L70.5,87 L61.5,87 L63,78 L54,78 L55.5,69 L64.5,69 Z">
+        <aapt:attr name="android:fillColor"><gradient android:startX="56" android:startY="61" android:endX="79" android:endY="85" android:type="linear" android:startColor="#FFF2A7" android:centerColor="#FFC13B" android:endColor="#E9900B" /></aapt:attr>
+    </path>
+    <path android:pathData="M66,60 L75,60 L73.5,69 L82.5,69 L81,78 L72,78 L70.5,87 L61.5,87 L63,78 L54,78 L55.5,69 L64.5,69 Z" android:fillColor="@android:color/transparent" android:strokeColor="#FFE4A1" android:strokeWidth="0.8"/>
+</vector>
