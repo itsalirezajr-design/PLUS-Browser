@@ -23,7 +23,7 @@ internal object AdBlocker {
     @Volatile private var exceptionRules: Set<String> = emptySet()
 
     fun loadSavedRules(context: Context) {
-        val raw=context.getSharedPreferences("plus",Context.MODE_PRIVATE).getString("advanced_ad_rules","") ?: ""
+        val raw=try { context.openFileInput("plus-advanced-ad-rules.txt").bufferedReader().use { it.readText() } } catch (_:Exception) { "" }
         setRules(raw)
     }
     fun setRules(raw:String) {
