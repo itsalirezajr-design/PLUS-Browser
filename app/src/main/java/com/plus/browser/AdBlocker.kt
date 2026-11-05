@@ -38,7 +38,7 @@ internal object AdBlocker {
     }
 
     fun parseAllowlist(raw: String): Set<String> = raw
-        .split(',', '\\n', ';')
+        .split(',', '\n', ';')
         .map { it.trim().lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/') }
         .filter { it.isNotBlank() && it.contains('.') }
         .toSet()
