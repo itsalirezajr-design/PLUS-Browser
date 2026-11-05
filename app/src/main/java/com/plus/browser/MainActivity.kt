@@ -319,7 +319,7 @@ class MainActivity:ComponentActivity() {
                             OutlinedTextField(value=speedDialUrl,onValueChange={speedDialUrl=it},singleLine=true,label={Text(t("Website address","آدرس سایت"))},placeholder={Text("https://example.com")})
                         }},
                         confirmButton={TextButton(onClick={saveSpeedDial()}) { Text(t("Save","ذخیره")) }},
-                        dismissButton={TextButton(onClick={showSpeedDialDialog=false}) { Text(t("Cancel","لغو")) }}
+                        dismissButton={Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) { TextButton(onClick={showSpeedDialDialog=false}) { Text(t("Cancel","لغو")) }; if(editingSpeedDial!=null) TextButton(onClick={persistSpeedDials(speedDials.filterNot{it.url==editingSpeedDial?.url});showSpeedDialDialog=false}) { Text(t("Delete","حذف"),color=MaterialTheme.colorScheme.error) } }}
                     )
                 }
             }
