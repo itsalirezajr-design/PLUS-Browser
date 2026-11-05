@@ -370,7 +370,13 @@ private fun BrowserWebView(
             w.visibility=if(visible) View.VISIBLE else View.INVISIBLE
             w.settings.javaScriptEnabled=true
             w.settings.domStorageEnabled=true
+            w.settings.databaseEnabled=true
+            w.settings.loadsImagesAutomatically=true
+            w.settings.javaScriptCanOpenWindowsAutomatically=false
+            w.settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            w.settings.offscreenPreRaster=true
             w.settings.cacheMode=if(tab.privateMode) WebSettings.LOAD_NO_CACHE else WebSettings.LOAD_DEFAULT
+            w.setLayerType(View.LAYER_TYPE_HARDWARE,null)
             w.settings.setSupportMultipleWindows(false)
             CookieManager.getInstance().setAcceptThirdPartyCookies(w,thirdParty && !tab.privateMode)
             w.webViewClient=object:WebViewClient() {
