@@ -12,6 +12,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.core.view.WindowCompat
 import android.view.View
 import android.view.ViewGroup
@@ -135,6 +138,10 @@ class MainActivity:ComponentActivity() {
     var scanError by remember { mutableStateOf<String?>(null) }
     var scanAgent by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
+    var qrResult by remember { mutableStateOf<String?>(null) }
+    val qrLauncher=rememberLauncherForActivityResult(ScanContract()) { result ->
+        if(result.contents!=null) qrResult=result.contents
+    }
     fun addTab(privateMode:Boolean) { val n=Tab(nextId++, privateMode); tabs.add(n); activeId=n.id; address=""; screen="browser" }
     fun closeTab(item:Tab) { tabs.remove(item); if(tabs.isEmpty()) { val n=Tab(nextId++,false); tabs.add(n) }; if(activeId==item.id) activeId=tabs.last().id }
     fun openUrl(url:String) { tab.error=false;tab.url=url;address=url;screen="browser";editing=false;keyboard?.hide();focusManager.clearFocus();tab.web?.loadUrl(url) }
@@ -181,6 +188,7 @@ class MainActivity:ComponentActivity() {
                                 if(address.isNotEmpty() && editing) IconButton(onClick={address=""},modifier=Modifier.size(36.dp)) { Text("×",fontSize=22.sp) }
                             }
                         })
+                        IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(44.dp)) { Text("▦",fontSize=22.sp,color=MaterialTheme.colorScheme.primary) }
                         IconButton(onClick={screen="tabs"},modifier=Modifier.size(44.dp)) { BadgedBox(badge={ Badge { Text("${tabs.size}") } }) { Text("▣", fontSize=22.sp) } }
                         PlusOverflowMenu(usage,isFa,onOpen={keyboard?.hide();focusManager.clearFocus()},onAction={ action -> when(action) {"new"->addTab(false);"private"->addTab(true);else->screen=action} })
                     }
@@ -245,6 +253,28 @@ class MainActivity:ComponentActivity() {
                         else -> Column(Modifier.fillMaxWidth().padding(24.dp)) { Text("✦  PLUS",fontSize=36.sp,fontWeight=FontWeight.Black,color=MaterialTheme.colorScheme.primary); Text("More Than Apps.",fontSize=17.sp,color=MaterialTheme.colorScheme.secondary); Spacer(Modifier.height(28.dp)); Text("PLUS Browser 1.0",fontWeight=FontWeight.Bold); Spacer(Modifier.height(12.dp)); Text(t("A native Android browser powered by Android WebView.","مرورگر بومی اندروید با فناوری Android WebView.")) }
                     }
                   }
+                }
+                if(qrResult!=null) {
+                    val scanned=qrResult!!.trim()
+                    val qrUrl=when {
+                        scanned.startsWith("https://",true) || scanned.startsWith("http://",true) -> scanned
+                        scanned.startsWith("www.",true) && android.util.Patterns.WEB_URL.matcher(scanned).matches() -> "https://$scanned"
+                        android.util.Patterns.WEB_URL.matcher(scanned).matches() -> "https://$scanned"
+                        else -> null
+                    }
+                    AlertDialog(
+                        onDismissRequest={qrResult=null},
+                        title={Text(t("QR code detected","کد QR شناسایی شد"))},
+                        text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                            Text(if(qrUrl!=null) t("A website link was found. Review it before opening.","یک لینک وب پیدا شد. پیش از بازکردن آن را بررسی کنید.") else t("The QR code contains this text:","محتوای این کد QR:"),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(scanned, color=MaterialTheme.colorScheme.onSurface, fontSize=14.sp)
+                        }},
+                        confirmButton={
+                            if(qrUrl!=null) TextButton(onClick={qrResult=null;openUrl(qrUrl)}) { Text(t("Open in PLUS","بازکردن در PLUS")) }
+                            else TextButton(onClick={ val clipboard=context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PLUS QR",scanned)); Toast.makeText(context,t("Copied","کپی شد"),Toast.LENGTH_SHORT).show(); qrResult=null }) { Text(t("Copy text","کپی متن")) }
+                        },
+                        dismissButton={TextButton(onClick={qrResult=null}) { Text(t("Close","بستن")) }}
+                    )
                 }
                 if(showSpeedDialDialog) {
                     AlertDialog(
