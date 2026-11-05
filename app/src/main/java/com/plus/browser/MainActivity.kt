@@ -55,6 +55,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 private data class Page(val title:String,val url:String)
+private data class SpeedDial(val name:String,val url:String)
 private class Tab(val id:Int, val privateMode:Boolean) {
     var web: WebView? = null
     var url by mutableStateOf("")
@@ -68,6 +69,8 @@ private class Store(context:Context) {
     val prefs=context.getSharedPreferences("plus", Context.MODE_PRIVATE)
     fun get(key:String):List<Page> = try { val a=JSONArray(prefs.getString(key,"[]")); (0 until a.length()).map { a.getJSONObject(it).let { o -> Page(o.optString("title"),o.getString("url")) } } } catch (_:Exception) { emptyList() }
     fun save(key:String, list:List<Page>) { val a=JSONArray(); list.take(200).forEach { a.put(JSONObject().put("title",it.title).put("url",it.url)) }; prefs.edit().putString(key,a.toString()).apply() }
+    fun getSpeedDials():List<SpeedDial> = try { val a=JSONArray(prefs.getString("speed_dials","[]")); (0 until a.length()).map { a.getJSONObject(it).let { o -> SpeedDial(o.optString("name"),o.getString("url")) } } } catch (_:Exception) { emptyList() }
+    fun saveSpeedDials(items:List<SpeedDial>) { val a=JSONArray(); items.take(24).forEach { a.put(JSONObject().put("name",it.name).put("url",it.url)) }; prefs.edit().putString("speed_dials",a.toString()).apply() }
 }
 class MainActivity:ComponentActivity() {
     private lateinit var usage:ProUsage
@@ -123,6 +126,11 @@ class MainActivity:ComponentActivity() {
     var editing by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(store.get("bookmarks")) }
     var history by remember { mutableStateOf(store.get("history")) }
+    var speedDials by remember { mutableStateOf(store.getSpeedDials().ifEmpty { listOf(SpeedDial("Google","https://www.google.com"),SpeedDial("YouTube","https://www.youtube.com"),SpeedDial("Wikipedia","https://www.wikipedia.org")) }) }
+    var showSpeedDialDialog by remember { mutableStateOf(false) }
+    var editingSpeedDial by remember { mutableStateOf<SpeedDial?>(null) }
+    var speedDialName by remember { mutableStateOf("") }
+    var speedDialUrl by remember { mutableStateOf("") }
     var scanItems by remember { mutableStateOf(emptyList<ScanItem>()) }
     var scanError by remember { mutableStateOf<String?>(null) }
     var scanAgent by remember { mutableStateOf("") }
@@ -138,6 +146,9 @@ class MainActivity:ComponentActivity() {
     }
     fun home() { tab.web?.stopLoading(); tab.url=""; tab.title=""; tab.error=false; address=""; screen="browser" }
     fun bookmark() { if(tab.url.isNotBlank()) { bookmarks=if(bookmarks.any{it.url==tab.url}) bookmarks.filterNot{it.url==tab.url} else listOf(Page(tab.title.ifBlank{tab.url},tab.url))+bookmarks; store.save("bookmarks",bookmarks) } }
+    fun persistSpeedDials(items:List<SpeedDial>) { speedDials=items; store.saveSpeedDials(items) }
+    fun editSpeedDial(item:SpeedDial?=null) { editingSpeedDial=item; speedDialName=item?.name ?: ""; speedDialUrl=item?.url ?: ""; showSpeedDialDialog=true }
+    fun saveSpeedDial() { val name=speedDialName.trim(); var url=speedDialUrl.trim(); if(name.isBlank() || url.isBlank()) { Toast.makeText(context,t("Enter a name and website address","نام و آدرس سایت را وارد کنید"),Toast.LENGTH_SHORT).show(); return }; if(!url.startsWith("https://",true) && !url.startsWith("http://",true)) url="https://$url"; if(!android.util.Patterns.WEB_URL.matcher(url).matches()) { Toast.makeText(context,t("Enter a valid website address","آدرس سایت معتبر وارد کنید"),Toast.LENGTH_SHORT).show(); return }; val updated=speedDials.filterNot { it.url==editingSpeedDial?.url || it.url.equals(url,true) } + SpeedDial(name,url); persistSpeedDials(updated); showSpeedDialDialog=false }
     fun updateHistory(item:Tab,url:String,title:String) { if(!item.privateMode && (url.startsWith("https://")||url.startsWith("http://"))) { history=listOf(Page(title.ifBlank { url },url))+history.filterNot{it.url==url}; history=history.take(200); store.save("history",history) } }
     LaunchedEffect(tab.id,tab.url,editing) { if(!editing) address=tab.url }
     LaunchedEffect(tab.id) { editing=false }
@@ -190,7 +201,8 @@ class MainActivity:ComponentActivity() {
                                 TextButton(onClick={searchQuery="";screen="search"}) { Text("⌕  PLUS SEARCH") }
                                 Spacer(Modifier.height(22.dp)); HomeProCard(usage,isFa,onOpen={screen="pro"})
                                 Spacer(Modifier.height(24.dp)); Text(t("QUICK ACCESS","دسترسی سریع"),fontSize=11.sp,letterSpacing=1.5.sp,color=MaterialTheme.colorScheme.secondary,fontWeight=FontWeight.Bold); Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.fillMaxWidth()) { listOf("Google" to "https://www.google.com", "YouTube" to "https://www.youtube.com", "Wikipedia" to "https://www.wikipedia.org").forEach { (name,url)-> Card(onClick={go(url)},modifier=Modifier.weight(1f),shape=RoundedCornerShape(18.dp)) { Column(Modifier.padding(13.dp),horizontalAlignment=Alignment.CenterHorizontally) { Text(name.take(1),fontSize=24.sp,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold); Spacer(Modifier.height(8.dp)); Text(name,fontSize=11.sp,maxLines=1) } } } }
+                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Your favorite sites","سایت‌های محبوب شما"),fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f),color=MaterialTheme.colorScheme.onSurfaceVariant); TextButton(onClick={editSpeedDial()}) { Text("+  "+t("Add","افزودن")) } }
+                                speedDials.chunked(3).forEach { group -> Row(horizontalArrangement=Arrangement.spacedBy(9.dp),modifier=Modifier.fillMaxWidth()) { group.forEach { item -> Card(onClick={go(item.url)},modifier=Modifier.weight(1f),shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.fillMaxWidth().padding(horizontal=7.dp,vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally) { Box(Modifier.size(38.dp).background(Brush.linearGradient(listOf(Color(0xff536dfe),Color(0xff9b68e8))),RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center) { Text(item.name.take(1).uppercase(),fontSize=19.sp,color=Color.White,fontWeight=FontWeight.Bold) }; Spacer(Modifier.height(7.dp)); Text(item.name,fontSize=11.sp,maxLines=1); Row { TextButton(onClick={editSpeedDial(item)},contentPadding=PaddingValues(horizontal=4.dp,vertical=0.dp)) { Text(t("Edit","ویرایش"),fontSize=10.sp) }; TextButton(onClick={persistSpeedDials(speedDials.filterNot{it.url==item.url})},contentPadding=PaddingValues(horizontal=4.dp,vertical=0.dp)) { Text("×",fontSize=14.sp,color=MaterialTheme.colorScheme.error) } } } } }; if(group.size<3) repeat(3-group.size) { Spacer(Modifier.weight(1f)) } } }
                                 Spacer(Modifier.height(30.dp)); Row(verticalAlignment=Alignment.CenterVertically) { Text(t("Bookmarks","نشانک‌ها"),fontWeight=FontWeight.Bold,fontSize=19.sp,modifier=Modifier.weight(1f)); TextButton(onClick={screen="bookmarks"}) { Text(t("See all","همه")) } }
                                 if(bookmarks.isEmpty()) Text(t("Save a page to find it here.","صفحه‌ای را ذخیره کنید تا اینجا ببینید."),color=MaterialTheme.colorScheme.onSurfaceVariant) else bookmarks.take(3).forEach { p -> PageRow(p,{go(p.url)},null) }
                                 if(!tab.privateMode) { Spacer(Modifier.height(22.dp)); Text(t("Recent","اخیر"),fontWeight=FontWeight.Bold,fontSize=19.sp); if(history.isEmpty()) Text(t("Your recent pages will appear here.","صفحات اخیر شما اینجا نمایش داده می‌شوند."),color=MaterialTheme.colorScheme.onSurfaceVariant) else history.take(3).forEach { p->PageRow(p,{go(p.url)},null) } }
@@ -233,6 +245,18 @@ class MainActivity:ComponentActivity() {
                         else -> Column(Modifier.fillMaxWidth().padding(24.dp)) { Text("✦  PLUS",fontSize=36.sp,fontWeight=FontWeight.Black,color=MaterialTheme.colorScheme.primary); Text("More Than Apps.",fontSize=17.sp,color=MaterialTheme.colorScheme.secondary); Spacer(Modifier.height(28.dp)); Text("PLUS Browser 1.0",fontWeight=FontWeight.Bold); Spacer(Modifier.height(12.dp)); Text(t("A native Android browser powered by Android WebView.","مرورگر بومی اندروید با فناوری Android WebView.")) }
                     }
                   }
+                }
+                if(showSpeedDialDialog) {
+                    AlertDialog(
+                        onDismissRequest={showSpeedDialDialog=false},
+                        title={Text(if(editingSpeedDial==null) t("Add a site","افزودن سایت") else t("Edit site","ویرایش سایت"))},
+                        text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(value=speedDialName,onValueChange={speedDialName=it},singleLine=true,label={Text(t("Site name","نام سایت"))})
+                            OutlinedTextField(value=speedDialUrl,onValueChange={speedDialUrl=it},singleLine=true,label={Text(t("Website address","آدرس سایت"))},placeholder={Text("https://example.com")})
+                        }},
+                        confirmButton={TextButton(onClick={saveSpeedDial}) { Text(t("Save","ذخیره")) }},
+                        dismissButton={TextButton(onClick={showSpeedDialDialog=false}) { Text(t("Cancel","لغو")) }}
+                    )
                 }
             }
         }
