@@ -254,7 +254,7 @@ class MainActivity:ComponentActivity() {
                             OutlinedTextField(value=speedDialName,onValueChange={speedDialName=it},singleLine=true,label={Text(t("Site name","نام سایت"))})
                             OutlinedTextField(value=speedDialUrl,onValueChange={speedDialUrl=it},singleLine=true,label={Text(t("Website address","آدرس سایت"))},placeholder={Text("https://example.com")})
                         }},
-                        confirmButton={TextButton(onClick={saveSpeedDial}) { Text(t("Save","ذخیره")) }},
+                        confirmButton={TextButton(onClick={saveSpeedDial()}) { Text(t("Save","ذخیره")) }},
                         dismissButton={TextButton(onClick={showSpeedDialDialog=false}) { Text(t("Cancel","لغو")) }}
                     )
                 }
