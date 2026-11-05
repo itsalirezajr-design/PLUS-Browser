@@ -42,14 +42,14 @@ internal object AdBlocker {
         networkRules=block; exceptionRules=allow
     }
 
-    fun isBlocked(url:String, allowlist:Set<String>, requestHeaders:Map<String,String> = emptyMap(), mainFrame:Boolean = false):Boolean {
+    fun isBlocked(url:String, allowlist:Set<String>, requestHeaders:Map<String,String> = emptyMap(), mainFrame:Boolean = false, advanced:Boolean = false):Boolean {
         val host=try { URI(url).host?.lowercase(Locale.ROOT) ?: return false } catch (_:Exception) { return false }
         if(host=="localhost" || host.endsWith(".localhost") || host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return false
         if(allowlist.any { host==it || host.endsWith(".$it") }) return false
-        if(exceptionRules.any { host==it || host.endsWith(".$it") }) return false
+        if(advanced && exceptionRules.any { host==it || host.endsWith(".$it") }) return false
         if(mainFrame) return false
         if(builtInHosts.any { host==it || host.endsWith(".$it") }) return true
-        return networkRules.any { host==it || host.endsWith(".$it") }
+        return advanced && networkRules.any { host==it || host.endsWith(".$it") }
     }
 
     fun parseAllowlist(raw:String):Set<String> = raw
