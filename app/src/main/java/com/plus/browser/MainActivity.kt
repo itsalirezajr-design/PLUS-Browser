@@ -95,8 +95,7 @@ class MainActivity:ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable private fun Browser(initialUrl:String?, usage:ProUsage, onSetDefault:()->Unit, fullscreen:FullscreenVideo) {
     val context=LocalContext.current
     val store=remember { Store(context) }
