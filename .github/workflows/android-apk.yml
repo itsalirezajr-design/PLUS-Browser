@@ -2,7 +2,7 @@ name: PLUS Browser APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/plus-browser-settings-search']
   workflow_dispatch:
 
 permissions:
