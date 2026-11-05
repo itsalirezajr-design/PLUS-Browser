@@ -3,6 +3,8 @@ package com.plus.browser
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Build
 import android.app.role.RoleManager
 import android.provider.Settings
@@ -29,6 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -141,6 +144,10 @@ class MainActivity:ComponentActivity() {
     var scanAgent by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var qrResult by remember { mutableStateOf<String?>(null) }
+    var adBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ad_block_enabled", true)) }
+    var adBlockedCount by remember { mutableIntStateOf(0) }
+    var adAllowlist by remember { mutableStateOf(store.prefs.getString("ad_block_allowlist", "") ?: "") }
+    var showAdBlockDialog by remember { mutableStateOf(false) }
     val qrLauncher=rememberLauncherForActivityResult(ScanContract()) { result ->
         if(result.contents!=null) qrResult=result.contents
     }
@@ -190,7 +197,8 @@ class MainActivity:ComponentActivity() {
                                 if(address.isNotEmpty() && editing) IconButton(onClick={address=""},modifier=Modifier.size(36.dp)) { Text("×",fontSize=22.sp) }
                             }
                         })
-                        IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(44.dp)) { Text("▦",fontSize=22.sp,color=MaterialTheme.colorScheme.primary) }
+                        IconButton(onClick={showAdBlockDialog=true},modifier=Modifier.size(40.dp).semantics { contentDescription=if(isFa) "مسدودکننده تبلیغات" else "Ad blocker" }) { Box { Text("🛡",fontSize=19.sp); if(adBlockEnabled) Box(Modifier.align(Alignment.BottomEnd).size(7.dp).background(Color(0xff42d69a),RoundedCornerShape(50))) } }
+                        IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(40.dp).semantics { contentDescription=if(isFa) "اسکن کد QR" else "Scan QR code" }) { ScannerGlyph() }
                         IconButton(onClick={screen="tabs"},modifier=Modifier.size(44.dp)) { BadgedBox(badge={ Badge { Text("${tabs.size}") } }) { Text("▣", fontSize=22.sp) } }
                         PlusOverflowMenu(usage,isFa,onOpen={keyboard?.hide();focusManager.clearFocus()},onAction={ action -> when(action) {"new"->addTab(false);"private"->addTab(true);else->screen=action} })
                     }
@@ -202,7 +210,7 @@ class MainActivity:ComponentActivity() {
                                     try { Downloads.get(context).add(url,agent,disposition,mime,CookieManager.getInstance().getCookie(url)); withContext(Dispatchers.Main) { Toast.makeText(context,if(isFa) "دانلود آغاز شد" else "Download started",Toast.LENGTH_SHORT).show() } }
                                     catch(e:Exception) { withContext(Dispatchers.Main) { Toast.makeText(context,"Download failed: ${e.message}",Toast.LENGTH_LONG).show() } }
                                 }
-                            })
+                            }, adBlockEnabled, AdBlocker.parseAllowlist(adAllowlist), { Handler(Looper.getMainLooper()).post { adBlockedCount++ } })
                         } }
                         if(tab.url.isBlank()) {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface))).padding(20.dp)) {
@@ -212,7 +220,7 @@ class MainActivity:ComponentActivity() {
                                 Spacer(Modifier.height(22.dp)); HomeProCard(usage,isFa,onOpen={screen="pro"})
                                 Spacer(Modifier.height(24.dp)); Text(t("QUICK ACCESS","دسترسی سریع"),fontSize=11.sp,letterSpacing=1.5.sp,color=MaterialTheme.colorScheme.secondary,fontWeight=FontWeight.Bold); Spacer(Modifier.height(12.dp))
                                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Your favorite sites","سایت‌های محبوب شما"),fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f),color=MaterialTheme.colorScheme.onSurfaceVariant); TextButton(onClick={editSpeedDial()}) { Text("+  "+t("Add","افزودن")) } }
-                                speedDials.chunked(3).forEach { group -> Row(horizontalArrangement=Arrangement.spacedBy(9.dp),modifier=Modifier.fillMaxWidth()) { group.forEach { item -> Card(modifier=Modifier.weight(1f).combinedClickable(onClick={go(item.url)},onLongClick={editSpeedDial(item)}),shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.fillMaxWidth().padding(horizontal=7.dp,vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally) { Box(Modifier.size(38.dp).background(Brush.linearGradient(listOf(Color(0xff536dfe),Color(0xff9b68e8))),RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center) { Text(item.name.take(1).uppercase(),fontSize=19.sp,color=Color.White,fontWeight=FontWeight.Bold) }; Spacer(Modifier.height(7.dp)); Text(item.name,fontSize=11.sp,maxLines=1); Row { TextButton(onClick={editSpeedDial(item)},contentPadding=PaddingValues(horizontal=4.dp,vertical=0.dp)) { Text(t("Edit","ویرایش"),fontSize=10.sp) }; TextButton(onClick={persistSpeedDials(speedDials.filterNot{it.url==item.url})},contentPadding=PaddingValues(horizontal=4.dp,vertical=0.dp)) { Text("×",fontSize=14.sp,color=MaterialTheme.colorScheme.error) } } } } }; if(group.size<3) repeat(3-group.size) { Spacer(Modifier.weight(1f)) } } }
+                                speedDials.chunked(3).forEach { group -> Row(horizontalArrangement=Arrangement.spacedBy(9.dp),modifier=Modifier.fillMaxWidth()) { group.forEach { item -> Card(modifier=Modifier.weight(1f).combinedClickable(onClick={go(item.url)},onLongClick={editSpeedDial(item)}),shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.fillMaxWidth().padding(horizontal=7.dp,vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally) { Box(Modifier.size(38.dp).background(Brush.linearGradient(listOf(Color(0xff536dfe),Color(0xff9b68e8))),RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center) { Text(item.name.take(1).uppercase(),fontSize=19.sp,color=Color.White,fontWeight=FontWeight.Bold) }; Spacer(Modifier.height(7.dp)); Text(item.name,fontSize=11.sp,maxLines=1) } } }; if(group.size<3) repeat(3-group.size) { Spacer(Modifier.weight(1f)) } } }
                                 Spacer(Modifier.height(30.dp)); Row(verticalAlignment=Alignment.CenterVertically) { Text(t("Bookmarks","نشانک‌ها"),fontWeight=FontWeight.Bold,fontSize=19.sp,modifier=Modifier.weight(1f)); TextButton(onClick={screen="bookmarks"}) { Text(t("See all","همه")) } }
                                 if(bookmarks.isEmpty()) Text(t("Save a page to find it here.","صفحه‌ای را ذخیره کنید تا اینجا ببینید."),color=MaterialTheme.colorScheme.onSurfaceVariant) else bookmarks.take(3).forEach { p -> PageRow(p,{go(p.url)},null) }
                                 if(!tab.privateMode) { Spacer(Modifier.height(22.dp)); Text(t("Recent","اخیر"),fontWeight=FontWeight.Bold,fontSize=19.sp); if(history.isEmpty()) Text(t("Your recent pages will appear here.","صفحات اخیر شما اینجا نمایش داده می‌شوند."),color=MaterialTheme.colorScheme.onSurfaceVariant) else history.take(3).forEach { p->PageRow(p,{go(p.url)},null) } }
@@ -248,7 +256,10 @@ class MainActivity:ComponentActivity() {
                             Text(t("LANGUAGE","زبان"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("App language","زبان برنامه"),modifier=Modifier.weight(1f)); Row { TextButton(onClick={language="fa";store.prefs.edit().putString("language","fa").apply()}) { Text("فارسی",color=if(isFa) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick={language="en";store.prefs.edit().putString("language","en").apply()}) { Text("English",color=if(!isFa) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) } } }
                             Spacer(Modifier.height(18.dp)); Text(t("APPEARANCE","ظاهر"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Dark theme","پوسته تیره"),modifier=Modifier.weight(1f)); Switch(checked=dark,onCheckedChange={dark=it;store.prefs.edit().putBoolean("dark",it).apply()}) }
                             Spacer(Modifier.height(22.dp)); Text(t("SEARCH ENGINE","موتور جستجو"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); listOf("Google","DuckDuckGo","Bing").forEach { name -> Row(Modifier.fillMaxWidth().clickable { engine=name;store.prefs.edit().putString("engine",name).apply() },verticalAlignment=Alignment.CenterVertically) { RadioButton(selected=engine==name,onClick={engine=name;store.prefs.edit().putString("engine",name).apply()}); Text(name) } }
-                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
+                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY & PROTECTION","حریم خصوصی و محافظت"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp)
+                            Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("PLUS Ad Blocker","مسدودکننده تبلیغات PLUS")); Text(t("Blocks common ad and tracking networks","مسدودسازی شبکه‌های رایج تبلیغات و ردیاب‌ها"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={adBlockEnabled=it;store.prefs.edit().putBoolean("ad_block_enabled",it).apply();tabs.forEach { tabItem -> tabItem.web?.reload() }}) }
+                            TextButton(onClick={showAdBlockDialog=true}) { Text(t("Manage allowed websites · $adBlockedCount blocked","مدیریت سایت‌های مجاز · $adBlockedCount مورد مسدودشده")) }
+                            Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
                             TextButton(onClick={history=emptyList();store.save("history",history)}) { Text(t("Clear browsing history","پاک کردن تاریخچه مرور")) }
                             TextButton(onClick={CookieManager.getInstance().removeAllCookies { scope.launch(Dispatchers.IO) { CookieManager.getInstance().flush() } };WebStorage.getInstance().deleteAllData();tabs.forEach { it.web?.clearCache(true) };Toast.makeText(context,"Site data cleared",Toast.LENGTH_SHORT).show()}) { Text(t("Clear cookies and site data","پاک کردن کوکی‌ها و داده‌های سایت")) }
                             Text(t("Private tabs omit PLUS history, but Android WebView shares cookies and site storage across tabs. Downloads and websites may still retain information.","زبانه‌های خصوصی در تاریخچه PLUS ذخیره نمی‌شوند، اما کوکی‌ها و داده‌های سایت در WebView مشترک هستند. دانلودها و وب‌سایت‌ها ممکن است اطلاعات را حفظ کنند."),fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -279,6 +290,26 @@ class MainActivity:ComponentActivity() {
                         dismissButton={TextButton(onClick={qrResult=null}) { Text(t("Close","بستن")) }}
                     )
                 }
+                if(showAdBlockDialog) {
+                    AlertDialog(
+                        onDismissRequest={showAdBlockDialog=false},
+                        title={Text(t("PLUS Ad Blocker","مسدودکننده تبلیغات PLUS"))},
+                        text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment=Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(if(adBlockEnabled) t("Protection is on","محافظت روشن است") else t("Protection is off","محافظت خاموش است"),fontWeight=FontWeight.SemiBold)
+                                    Text(t("$adBlockedCount requests blocked this session","$adBlockedCount درخواست در این نشست مسدود شده"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked=adBlockEnabled,onCheckedChange={adBlockEnabled=it;store.prefs.edit().putBoolean("ad_block_enabled",it).apply();tabs.forEach { it.web?.reload() }})
+                            }
+                            Text(t("Allowed websites (one domain per line)","سایت‌های مجاز (هر دامنه در یک خط)"),fontSize=13.sp)
+                            OutlinedTextField(value=adAllowlist,onValueChange={adAllowlist=it},modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4,placeholder={Text("example.com")})
+                            Text(t("Uses a built-in list of common ad networks. Some ads may still appear and some sites may need to be allowed.","از فهرست داخلی شبکه‌های تبلیغاتی رایج استفاده می‌کند؛ ممکن است بعضی تبلیغات عبور کنند یا برخی سایت‌ها نیاز به مجازشدن داشته باشند."),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }},
+                        confirmButton={TextButton(onClick={store.prefs.edit().putString("ad_block_allowlist",adAllowlist).apply();showAdBlockDialog=false;tabs.forEach { it.web?.reload() }}) { Text(t("Save","ذخیره")) }},
+                        dismissButton={TextButton(onClick={showAdBlockDialog=false}) { Text(t("Close","بستن")) }}
+                    )
+                }
                 if(showSpeedDialDialog) {
                     AlertDialog(
                         onDismissRequest={showSpeedDialDialog=false},
@@ -307,12 +338,18 @@ private fun BrowserWebView(
     background: Int,
     fullscreen: FullscreenVideo,
     onVisit: (String, String) -> Unit,
-    onDownload: (String, String?, String?, String?) -> Unit
+    onDownload: (String, String?, String?, String?) -> Unit,
+    adBlockEnabled: Boolean,
+    adAllowlist: Set<String>,
+    onAdBlocked: () -> Unit
 ) {
     val context=LocalContext.current
     val latestVisible by rememberUpdatedState(visible)
     val latestVisit by rememberUpdatedState(onVisit)
     val latestDownload by rememberUpdatedState(onDownload)
+    val latestAdBlockEnabled by rememberUpdatedState(adBlockEnabled)
+    val latestAllowlist by rememberUpdatedState(adAllowlist)
+    val latestAdBlocked by rememberUpdatedState(onAdBlocked)
     DisposableEffect(tab) {
         onDispose {
             tab.web?.let { w ->
@@ -337,6 +374,13 @@ private fun BrowserWebView(
             w.settings.setSupportMultipleWindows(false)
             CookieManager.getInstance().setAcceptThirdPartyCookies(w,thirdParty && !tab.privateMode)
             w.webViewClient=object:WebViewClient() {
+                override fun shouldInterceptRequest(view:WebView, request:WebResourceRequest): WebResourceResponse? {
+                    if(latestAdBlockEnabled && AdBlocker.isBlocked(request.url.toString(), latestAllowlist)) {
+                        latestAdBlocked()
+                        return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
                 override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean {
                     val uri=request.url
                     if(uri.scheme=="http"||uri.scheme=="https") return false
@@ -368,6 +412,26 @@ private fun BrowserWebView(
         val accept=thirdParty && !tab.privateMode
         if(CookieManager.getInstance().acceptThirdPartyCookies(view)!=accept) CookieManager.getInstance().setAcceptThirdPartyCookies(view,accept)
     })
+}
+
+@Composable private fun ScannerGlyph() {
+    val color=MaterialTheme.colorScheme.primary
+    Canvas(Modifier.size(23.dp)) {
+        val s=size.minDimension
+        val w=2.dp.toPx()
+        val a=s*0.12f
+        val b=s*0.38f
+        val e=s-a
+        drawLine(color, androidx.compose.ui.geometry.Offset(a,b), androidx.compose.ui.geometry.Offset(a,a), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(a,a), androidx.compose.ui.geometry.Offset(b,a), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(e-b+a,a), androidx.compose.ui.geometry.Offset(e,a), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(e,a), androidx.compose.ui.geometry.Offset(e,b), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(a,e-b+a), androidx.compose.ui.geometry.Offset(a,e), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(a,e), androidx.compose.ui.geometry.Offset(b,e), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(e-b+a,e), androidx.compose.ui.geometry.Offset(e,e), w)
+        drawLine(color, androidx.compose.ui.geometry.Offset(e,e), androidx.compose.ui.geometry.Offset(e,e-b+a), w)
+        drawCircle(color, radius=s*0.09f)
+    }
 }
 
 @Composable private fun PageProgress(tab:Tab) { Box(Modifier.fillMaxWidth().height(3.dp)) { if(tab.progress<100 && tab.url.isNotBlank()) LinearProgressIndicator(progress={tab.progress/100f},modifier=Modifier.fillMaxSize()) } }
