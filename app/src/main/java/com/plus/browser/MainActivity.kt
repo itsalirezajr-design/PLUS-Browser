@@ -147,7 +147,9 @@ class MainActivity:ComponentActivity() {
     var adBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ad_block_enabled", true)) }
     var adBlockedCount by remember { mutableIntStateOf(0) }
     var adAllowlist by remember { mutableStateOf(store.prefs.getString("ad_block_allowlist", "") ?: "") }
-    var showAdBlockDialog by remember { mutableStateOf(false) }\n    var ultimateAdBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ultimate_ad_blocker", false)) }\n    LaunchedEffect(Unit) { AdBlocker.loadSavedRules(context); AdFilterUpdateWorker.schedule(context) }
+    var showAdBlockDialog by remember { mutableStateOf(false) }
+    var ultimateAdBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ultimate_ad_blocker", false)) }
+    LaunchedEffect(Unit) { AdBlocker.loadSavedRules(context); AdFilterUpdateWorker.schedule(context) }
     val qrLauncher=rememberLauncherForActivityResult(ScanContract()) { result ->
         if(result.contents!=null) qrResult=result.contents
     }
@@ -341,13 +343,15 @@ private fun BrowserWebView(
     onDownload: (String, String?, String?, String?) -> Unit,
     adBlockEnabled: Boolean,
     adAllowlist: Set<String>,
+    ultimateAdBlockEnabled:Boolean,
     onAdBlocked: () -> Unit
 ) {
     val context=LocalContext.current
     val latestVisible by rememberUpdatedState(visible)
     val latestVisit by rememberUpdatedState(onVisit)
     val latestDownload by rememberUpdatedState(onDownload)
-    val latestAdBlockEnabled by rememberUpdatedState(adBlockEnabled)\n    val latestUltimateAdBlockEnabled by rememberUpdatedState(ultimateAdBlockEnabled)
+    val latestAdBlockEnabled by rememberUpdatedState(adBlockEnabled)
+    val latestUltimateAdBlockEnabled by rememberUpdatedState(ultimateAdBlockEnabled)
     val latestAllowlist by rememberUpdatedState(adAllowlist)
     val latestAdBlocked by rememberUpdatedState(onAdBlocked)
     DisposableEffect(tab) {
