@@ -27,17 +27,16 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Restore PLUS signing key
-        env:
-          PLUS_DEBUG_KEYSTORE_BASE64: ${{ secrets.PLUS_DEBUG_KEYSTORE_BASE64 }}
+      - name: Generate new PLUS signing key
         run: |
-          if [ -z "$PLUS_DEBUG_KEYSTORE_BASE64" ]; then
-            echo "Missing repository secret PLUS_DEBUG_KEYSTORE_BASE64. Add the existing plus-debug.keystore as a base64 GitHub Actions secret to preserve upgrade compatibility."
-            exit 1
-          fi
           mkdir -p signing
-          echo "$PLUS_DEBUG_KEYSTORE_BASE64" | base64 --decode > signing/plus-debug.keystore
-          test -s signing/plus-debug.keystore
+          keytool -genkeypair -v \
+            -keystore signing/plus-debug.keystore \
+            -storepass android \
+            -alias plusdebug \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=PLUS Browser, OU=PLUS, O=PLUS, L=Amsterdam, ST=North Holland, C=NL"
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
