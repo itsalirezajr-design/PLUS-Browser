@@ -41,10 +41,10 @@ jobs:
             -dname "CN=PLUS Browser, OU=PLUS, O=PLUS, L=Amsterdam, ST=North Holland, C=NL"
 
       - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+        run: bash ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
 
       - name: Build APK
-        run: ./gradlew :app:assembleDebug --no-daemon --console=plain
+        run: bash ./gradlew :app:assembleDebug --no-daemon --console=plain
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
