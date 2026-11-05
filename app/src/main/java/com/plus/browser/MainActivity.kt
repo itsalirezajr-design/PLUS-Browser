@@ -147,7 +147,7 @@ class MainActivity:ComponentActivity() {
     var adBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ad_block_enabled", true)) }
     var adBlockedCount by remember { mutableIntStateOf(0) }
     var adAllowlist by remember { mutableStateOf(store.prefs.getString("ad_block_allowlist", "") ?: "") }
-    var showAdBlockDialog by remember { mutableStateOf(false) }
+    var showAdBlockDialog by remember { mutableStateOf(false) }\n    var ultimateAdBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("ultimate_ad_blocker", false)) }\n    LaunchedEffect(Unit) { AdBlocker.loadSavedRules(context); AdFilterUpdateWorker.schedule(context) }
     val qrLauncher=rememberLauncherForActivityResult(ScanContract()) { result ->
         if(result.contents!=null) qrResult=result.contents
     }
@@ -210,7 +210,7 @@ class MainActivity:ComponentActivity() {
                                     try { Downloads.get(context).add(url,agent,disposition,mime,CookieManager.getInstance().getCookie(url)); withContext(Dispatchers.Main) { Toast.makeText(context,if(isFa) "دانلود آغاز شد" else "Download started",Toast.LENGTH_SHORT).show() } }
                                     catch(e:Exception) { withContext(Dispatchers.Main) { Toast.makeText(context,"Download failed: ${e.message}",Toast.LENGTH_LONG).show() } }
                                 }
-                            }, adBlockEnabled, AdBlocker.parseAllowlist(adAllowlist), { Handler(Looper.getMainLooper()).post { adBlockedCount++ } })
+                            }, adBlockEnabled, AdBlocker.parseAllowlist(adAllowlist), usage.unlocked && ultimateAdBlockEnabled, { Handler(Looper.getMainLooper()).post { adBlockedCount++ } })
                         } }
                         if(tab.url.isBlank()) {
                             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface))).padding(20.dp)) {
@@ -246,7 +246,7 @@ class MainActivity:ComponentActivity() {
                         "downloads" -> DownloadsScreen()
                         "pro" -> ProScreen(usage,proTheme,onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
                             if(usage.unlocked) { scanAgent=tab.web?.settings?.userAgentString ?: "";scanPage(tab.web) { found,error -> scanItems=found;scanError=error;screen="detected" } }
-                        },onDownloads={screen="downloads"},modifier=Modifier.weight(1f))
+                        },onDownloads={screen="downloads"},ultimateAdBlockEnabled=ultimateAdBlockEnabled,onUltimateAdBlock={enabled -> ultimateAdBlockEnabled=enabled;store.prefs.edit().putBoolean("ultimate_ad_blocker",enabled).apply();AdBlocker.loadSavedRules(context);tabs.forEach { it.web?.reload() }},modifier=Modifier.weight(1f))
                         "detected" -> if(usage.unlocked) ScanResults(scanItems,scanError,scanAgent,onDownloads={screen="downloads"}) else Text("PLUS PRO+ is locked.",Modifier.padding(20.dp))
                         "tabs" -> Column(Modifier.fillMaxSize().padding(16.dp)) { Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick={addTab(false)}) { Text(t("+ New tab","+ زبانه جدید")) }; OutlinedButton(onClick={addTab(true)}) { Text(t("+ Private","+ خصوصی")) } }; Spacer(Modifier.height(12.dp)); LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)) { items(tabs.toList(),key={it.id}) { item -> Card(onClick={activeId=item.id;screen="browser"},modifier=Modifier.fillMaxWidth()) { Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically) { Text(if(item.privateMode) "◈" else "◎",fontSize=24.sp,color=MaterialTheme.colorScheme.primary); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(item.title.ifBlank{if(item.privateMode)t("Private tab","زبانه خصوصی") else t("New tab","زبانه جدید")},maxLines=1,fontWeight=FontWeight.SemiBold); Text(item.url.ifBlank { t("Home","خانه") },maxLines=1,fontSize=12.sp) }; IconButton(onClick={closeTab(item)}) { Text("×",fontSize=24.sp) } } } } } }
                         "bookmarks", "history" -> { val isBook=screen=="bookmarks"; val pages=if(isBook)bookmarks else history
@@ -347,7 +347,7 @@ private fun BrowserWebView(
     val latestVisible by rememberUpdatedState(visible)
     val latestVisit by rememberUpdatedState(onVisit)
     val latestDownload by rememberUpdatedState(onDownload)
-    val latestAdBlockEnabled by rememberUpdatedState(adBlockEnabled)
+    val latestAdBlockEnabled by rememberUpdatedState(adBlockEnabled)\n    val latestUltimateAdBlockEnabled by rememberUpdatedState(ultimateAdBlockEnabled)
     val latestAllowlist by rememberUpdatedState(adAllowlist)
     val latestAdBlocked by rememberUpdatedState(onAdBlocked)
     DisposableEffect(tab) {
@@ -375,7 +375,7 @@ private fun BrowserWebView(
             CookieManager.getInstance().setAcceptThirdPartyCookies(w,thirdParty && !tab.privateMode)
             w.webViewClient=object:WebViewClient() {
                 override fun shouldInterceptRequest(view:WebView, request:WebResourceRequest): WebResourceResponse? {
-                    if(latestAdBlockEnabled && AdBlocker.isBlocked(request.url.toString(), latestAllowlist)) {
+                    if((latestAdBlockEnabled || latestUltimateAdBlockEnabled) && AdBlocker.isBlocked(request.url.toString(), latestAllowlist, request.requestHeaders, request.isForMainFrame)) {
                         latestAdBlocked()
                         return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                     }
