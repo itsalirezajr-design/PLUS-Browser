@@ -381,7 +381,7 @@ private fun BrowserWebView(
             CookieManager.getInstance().setAcceptThirdPartyCookies(w,thirdParty && !tab.privateMode)
             w.webViewClient=object:WebViewClient() {
                 override fun shouldInterceptRequest(view:WebView, request:WebResourceRequest): WebResourceResponse? {
-                    if((latestAdBlockEnabled || latestUltimateAdBlockEnabled) && AdBlocker.isBlocked(request.url.toString(), latestAllowlist, request.requestHeaders, request.isForMainFrame)) {
+                    if((latestAdBlockEnabled || latestUltimateAdBlockEnabled) && AdBlocker.isBlocked(request.url.toString(), latestAllowlist, request.requestHeaders, request.isForMainFrame, latestUltimateAdBlockEnabled)) {
                         latestAdBlocked()
                         return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                     }
