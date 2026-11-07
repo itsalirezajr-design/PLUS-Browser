@@ -190,6 +190,7 @@ class MainActivity:ComponentActivity() {
                                 if(address.isNotEmpty() && editing) IconButton(onClick={address=""},modifier=Modifier.size(36.dp)) { Text("×",fontSize=22.sp) }
                             }
                         })
+                        IconButton(onClick={ adBlockEnabled=!adBlockEnabled; AdBlocker.setEnabled(context,adBlockEnabled) },modifier=Modifier.size(40.dp).semantics { contentDescription=if(adBlockEnabled) "Ad blocker enabled" else "Ad blocker disabled" }) { Text("🛡",fontSize=19.sp,color=if(adBlockEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                         IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(44.dp)) { Text("▦",fontSize=22.sp,color=MaterialTheme.colorScheme.primary) }
                         IconButton(onClick={screen="tabs"},modifier=Modifier.size(44.dp)) { BadgedBox(badge={ Badge { Text("${tabs.size}") } }) { Text("▣", fontSize=22.sp) } }
                         PlusOverflowMenu(usage,isFa,onOpen={keyboard?.hide();focusManager.clearFocus()},onAction={ action -> when(action) {"new"->addTab(false);"private"->addTab(true);else->screen=action} })
@@ -236,7 +237,7 @@ class MainActivity:ComponentActivity() {
                     when(screen) {
                         "search" -> PlusSearchScreen(searchQuery,{searchQuery=it},engine,onSearch={openUrl(it)},modifier=Modifier.weight(1f))
                         "downloads" -> DownloadsScreen()
-                        "pro" -> ProScreen(usage,proTheme,onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
+                        "pro" -> ProScreen(usage,proTheme,adBlockEnabled=adBlockEnabled,onAdBlockChange={ enabled -> adBlockEnabled=enabled;AdBlocker.setEnabled(context,enabled) },onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
                             if(usage.unlocked) { scanAgent=tab.web?.settings?.userAgentString ?: "";scanPage(tab.web) { found,error -> scanItems=found;scanError=error;screen="detected" } }
                         },onDownloads={screen="downloads"},modifier=Modifier.weight(1f))
                         "detected" -> if(usage.unlocked) ScanResults(scanItems,scanError,scanAgent,onDownloads={screen="downloads"}) else Text("PLUS PRO+ is locked.",Modifier.padding(20.dp))
