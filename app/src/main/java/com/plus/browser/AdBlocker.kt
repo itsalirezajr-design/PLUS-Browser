@@ -13,6 +13,22 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
+ * Returns true only when the host is an exact blocked domain or its subdomain.
+ * Kept independent of Android APIs so the matching rules can be unit-tested.
+ */
+internal fun matchesBlockedHost(hostValue: String, blockedHosts: Set<String>): Boolean {
+    val host = hostValue.trim().trimEnd('.').lowercase(Locale.ROOT)
+    if (host.isBlank()) return false
+    var candidate = host
+    while (true) {
+        if (candidate in blockedHosts) return true
+        val dot = candidate.indexOf('.')
+        if (dot < 0) return false
+        candidate = candidate.substring(dot + 1)
+    }
+}
+
+/**
  * Lightweight host-based ad/tracker blocking for Android WebView.
  * Downloads the maintained StevenBlack hosts list and keeps a small
  * built-in fallback so blocking works before the first successful refresh.
@@ -32,7 +48,8 @@ object AdBlocker {
 
     private val fallbackHosts = setOf(
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-        "adservice.google.com", "adnxs.com", "adform.net", "taboola.com",
+        "adservice.google.com", "pagead2.googlesyndication.com",
+        "adnxs.com", "adform.net", "taboola.com",
         "outbrain.com", "criteo.com", "rubiconproject.com", "pubmatic.com",
         "openx.net", "casalemedia.com", "scorecardresearch.com", "quantserve.com",
         "adroll.com", "serving-sys.com", "moatads.com", "popads.net",
@@ -58,10 +75,15 @@ object AdBlocker {
         }
     }
 
-    fun setEnabled(context: Context, value: Boolean) {
+    /** Persist synchronously so every control and WebView request sees the same state. */
+    fun setEnabled(context: Context, value: Boolean): Boolean {
+        val saved = context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(ENABLED_KEY, value)
+            .commit()
         enabled = value
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(ENABLED_KEY, value).apply()
+        return saved
     }
 
     fun isEnabled(): Boolean = enabled
@@ -69,17 +91,11 @@ object AdBlocker {
     fun shouldBlock(url: String): Boolean {
         if (!enabled) return false
         val host = try {
-            Uri.parse(url).host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
+            Uri.parse(url).host ?: return false
         } catch (_: Exception) {
             return false
         }
-        if (host.isBlank()) return false
-        var candidate = host
-        while (candidate.contains('.')) {
-            if (blockedHosts.contains(candidate)) return true
-            candidate = candidate.substringAfter('.', "")
-        }
-        return false
+        return matchesBlockedHost(host, blockedHosts)
     }
 
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
