@@ -98,6 +98,8 @@ class MainActivity:ComponentActivity() {
 @Composable private fun Browser(initialUrl:String?, usage:ProUsage, onSetDefault:()->Unit, fullscreen:FullscreenVideo) {
     val context=LocalContext.current
     val store=remember { Store(context) }
+    AdBlocker.initialize(context)
+    var adBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("adBlockEnabled",true)) }
     val scope=rememberCoroutineScope()
     val focusManager=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
@@ -245,7 +247,7 @@ class MainActivity:ComponentActivity() {
                         "settings" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                             Text(t("APPEARANCE","ظاهر"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Dark theme","پوسته تیره"),modifier=Modifier.weight(1f)); Switch(checked=dark,onCheckedChange={dark=it;store.prefs.edit().putBoolean("dark",it).apply()}) }
                             Spacer(Modifier.height(22.dp)); Text(t("SEARCH ENGINE","موتور جستجو"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); listOf("Google","DuckDuckGo","Bing").forEach { name -> Row(Modifier.fillMaxWidth().clickable { engine=name;store.prefs.edit().putString("engine",name).apply() },verticalAlignment=Alignment.CenterVertically) { RadioButton(selected=engine==name,onClick={engine=name;store.prefs.edit().putString("engine",name).apply()}); Text(name) } }
-                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
+                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Block ads and trackers","مسدودسازی تبلیغات و ردیاب‌ها")); Text(t("Uses a maintained host filter list","با فهرست فیلتر به‌روز"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={adBlockEnabled=it;AdBlocker.setEnabled(context,it)}) }; Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
                             TextButton(onClick={history=emptyList();store.save("history",history)}) { Text(t("Clear browsing history","پاک کردن تاریخچه مرور")) }
                             TextButton(onClick={CookieManager.getInstance().removeAllCookies { scope.launch(Dispatchers.IO) { CookieManager.getInstance().flush() } };WebStorage.getInstance().deleteAllData();tabs.forEach { it.web?.clearCache(true) };Toast.makeText(context,"Site data cleared",Toast.LENGTH_SHORT).show()}) { Text(t("Clear cookies and site data","پاک کردن کوکی‌ها و داده‌های سایت")) }
                             Text(t("Private tabs omit PLUS history, but Android WebView shares cookies and site storage across tabs. Downloads and websites may still retain information.","زبانه‌های خصوصی در تاریخچه PLUS ذخیره نمی‌شوند، اما کوکی‌ها و داده‌های سایت در WebView مشترک هستند. دانلودها و وب‌سایت‌ها ممکن است اطلاعات را حفظ کنند."),fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -339,6 +341,9 @@ private fun BrowserWebView(
                     if(uri.scheme=="http"||uri.scheme=="https") return false
                     return try { context.startActivity(Intent(Intent.ACTION_VIEW,uri).addCategory(Intent.CATEGORY_BROWSABLE)); true }
                     catch(_:Exception) { Toast.makeText(context,"No app can open this link",Toast.LENGTH_SHORT).show(); true }
+                }
+                override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse? {
+                    return AdBlocker.intercept(request) ?: super.shouldInterceptRequest(view,request)
                 }
                 override fun onPageStarted(view:WebView,url:String?,favicon:android.graphics.Bitmap?) {
                     tab.error=false; tab.url=url ?: ""; tab.back=view.canGoBack(); tab.forward=view.canGoForward()
