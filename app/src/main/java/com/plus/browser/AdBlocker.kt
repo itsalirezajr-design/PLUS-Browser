@@ -115,9 +115,11 @@ object AdBlocker {
 
     fun intercept(request: WebResourceRequest, onBlocked: () -> Unit = {}): WebResourceResponse? {
         if (request.isForMainFrame || !shouldBlock(request.url.toString())) return null
-        val next = synchronized(this) { (blockedTotal + 1L).also { blockedTotal = it } }
-        appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            ?.edit()?.putLong(BLOCKED_COUNT_KEY, next)?.apply()
+        synchronized(this) {
+            blockedTotal += 1L
+            appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                ?.edit()?.putLong(BLOCKED_COUNT_KEY, blockedTotal)?.apply()
+        }
         onBlocked()
         return WebResourceResponse(
             "text/plain",
