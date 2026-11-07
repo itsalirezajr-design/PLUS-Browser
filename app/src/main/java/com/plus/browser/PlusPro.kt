@@ -103,10 +103,15 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
             if(usage.unlocked) proThemes.forEach { theme -> Row(Modifier.fillMaxWidth().clickable {onTheme(theme.name)}.padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) { Box(Modifier.size(22.dp).background(theme.background, RoundedCornerShape(6.dp)).border(2.dp,theme.primary,RoundedCornerShape(6.dp)));Spacer(Modifier.width(10.dp)); Text(theme.name,Modifier.weight(1f)); if(theme.name==themeName) Text("✓",color=gold) } }
         } }
         item { FeatureCard("05","PLUS DEEP FREEZE","Unavailable: safe hibernation of active media and critical page operations is not implemented.","UNAVAILABLE") {} }
-        item { FeatureCard("06","PLUS AD BLOCKER","FREE for every user. No PLUS PRO+ unlock or paid subscription is required. Blocks known ad and tracker domains; some first-party or embedded ads may still appear.",if(adBlockEnabled) "FREE · ACTIVE" else "FREE · OFF") {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text(if(adBlockEnabled) "Ad and tracker blocking is enabled" else "Ad and tracker blocking is disabled",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
-                Switch(checked=adBlockEnabled,onCheckedChange=onAdBlockChange)
+        item { FeatureCard("06","PLUS PRO+ ADVANCED AD BLOCKER","Advanced ad and tracker filtering with an expanded host list. This protection is reserved for PLUS PRO+ and remains locked until PLUS is your default browser.",if(!usage.unlocked) "LOCKED" else if(adBlockEnabled) "ACTIVE" else "OFF") {
+            if(usage.unlocked) {
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                    Text(if(adBlockEnabled) "Advanced protection is enabled" else "Advanced protection is disabled",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
+                    Switch(checked=adBlockEnabled,onCheckedChange=onAdBlockChange)
+                }
+            } else {
+                Text("Unlock PLUS PRO+ to activate the advanced ad blocker. Set PLUS Browser as your default browser; no paid subscription is required.",fontSize=13.sp,color=Color(0xffc5c7d2))
+                Button(onClick=onSetDefault,colors=ButtonDefaults.buttonColors(containerColor=gold,contentColor=Color(0xff171321))) { Text("UNLOCK PLUS PRO+") }
             }
         } }
         if(DebugAccess.enabled && usage.developer) item { TextButton(onClick={usage.revokeDeveloper()}) {Text("Revoke developer test access")};Text("Developer tap window: $tapWindow seconds",fontSize=12.sp); Row {listOf(5,10,20,30).forEach { n->TextButton(onClick={tapWindow=n;prefs.edit().putInt("tap_window",n).apply()}) {Text("${n}s")} } } }
