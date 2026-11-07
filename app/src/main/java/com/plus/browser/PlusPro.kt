@@ -67,7 +67,7 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
     }
 }
 
-@Composable internal fun ProScreen(usage:ProUsage,themeName:String,onSetDefault:()->Unit,onTheme:(String)->Unit,onScan:()->Unit,onDownloads:()->Unit, modifier:Modifier=Modifier) {
+@Composable internal fun ProScreen(usage:ProUsage,themeName:String,adBlockEnabled:Boolean,onAdBlockChange:(Boolean)->Unit,onSetDefault:()->Unit,onTheme:(String)->Unit,onScan:()->Unit,onDownloads:()->Unit, modifier:Modifier=Modifier) {
     val context=androidx.compose.ui.platform.LocalContext.current
     val prefs=remember {context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE)}
     val gold=Color(0xffe9ca85)
@@ -103,6 +103,12 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
             if(usage.unlocked) proThemes.forEach { theme -> Row(Modifier.fillMaxWidth().clickable {onTheme(theme.name)}.padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) { Box(Modifier.size(22.dp).background(theme.background, RoundedCornerShape(6.dp)).border(2.dp,theme.primary,RoundedCornerShape(6.dp)));Spacer(Modifier.width(10.dp)); Text(theme.name,Modifier.weight(1f)); if(theme.name==themeName) Text("✓",color=gold) } }
         } }
         item { FeatureCard("05","PLUS DEEP FREEZE","Unavailable: safe hibernation of active media and critical page operations is not implemented.","UNAVAILABLE") {} }
+        item { FeatureCard("06","PLUS AD BLOCKER","Block known advertising and tracking domains while browsing. Some first-party or embedded ads may still appear.",if(adBlockEnabled) "ACTIVE" else "OFF") {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(if(adBlockEnabled) "Ad and tracker blocking is enabled" else "Ad and tracker blocking is disabled",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
+                Switch(checked=adBlockEnabled,onCheckedChange=onAdBlockChange)
+            }
+        } }
         if(DebugAccess.enabled && usage.developer) item { TextButton(onClick={usage.revokeDeveloper()}) {Text("Revoke developer test access")};Text("Developer tap window: $tapWindow seconds",fontSize=12.sp); Row {listOf(5,10,20,30).forEach { n->TextButton(onClick={tapWindow=n;prefs.edit().putInt("tap_window",n).apply()}) {Text("${n}s")} } } }
     }
     if(DebugAccess.enabled && codeDialog) AlertDialog(onDismissRequest={codeDialog=false;code=""},title={Text("Developer test access")},text={Column {OutlinedTextField(value=code,onValueChange={code=it},singleLine=true,label={Text("Developer code")});if(invalid)Text("Invalid code",color=MaterialTheme.colorScheme.error)}},confirmButton={TextButton(onClick={if(DebugAccess.verify(code)){usage.developerUnlock();codeDialog=false;code="";invalid=false}else invalid=true}){Text("Unlock")}},dismissButton={TextButton(onClick={codeDialog=false;code=""}){Text("Cancel")}})
