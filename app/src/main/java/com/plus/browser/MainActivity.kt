@@ -81,7 +81,7 @@ class MainActivity:ComponentActivity() {
     private lateinit var usage:ProUsage
     private lateinit var fullscreen:FullscreenVideo
     private val browserRoleRequest=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::usage.isInitialized) usage.refresh() }
-    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); AdBlocker.initialize(applicationContext); usage=ProUsage(this); fullscreen=FullscreenVideo(this); WindowCompat.setDecorFitsSystemWindows(window,false); setContent { Browser(intent?.dataString,usage,::requestDefaultBrowser,fullscreen) } }
+    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); AdBlocker.initialize(applicationContext); usage=ProUsage(this); AdBlocker.setProUnlocked(usage.unlocked); fullscreen=FullscreenVideo(this); WindowCompat.setDecorFitsSystemWindows(window,false); setContent { Browser(intent?.dataString,usage,::requestDefaultBrowser,fullscreen) } }
     override fun onResume() { super.onResume(); if(::usage.isInitialized) usage.refresh() }
     override fun onDestroy() { if(::fullscreen.isInitialized) fullscreen.hide(); super.onDestroy() }
     private fun requestDefaultBrowser() {
@@ -134,7 +134,7 @@ class MainActivity:ComponentActivity() {
         AdBlocker.setProUnlocked(usage.unlocked)
         adBlockEnabled = AdBlocker.isEnabled()
         blockedAdCount = AdBlocker.blockedCount()
-        if (!usage.unlocked && showAdBlockPopup) showAdBlockPopup = true
+        if (!usage.unlocked) showAdBlockPopup = false
     }
     fun applyAdBlockSetting(enabled:Boolean) {
         if (!usage.unlocked) { showAdBlockPopup = false; screen = "pro"; return }
