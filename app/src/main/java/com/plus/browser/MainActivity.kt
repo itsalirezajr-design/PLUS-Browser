@@ -79,7 +79,7 @@ class MainActivity:ComponentActivity() {
     private lateinit var usage:ProUsage
     private lateinit var fullscreen:FullscreenVideo
     private val browserRoleRequest=registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if(::usage.isInitialized) usage.refresh() }
-    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); usage=ProUsage(this); fullscreen=FullscreenVideo(this); WindowCompat.setDecorFitsSystemWindows(window,false); setContent { Browser(intent?.dataString,usage,::requestDefaultBrowser,fullscreen) } }
+    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); AdBlocker.initialize(applicationContext); usage=ProUsage(this); fullscreen=FullscreenVideo(this); WindowCompat.setDecorFitsSystemWindows(window,false); setContent { Browser(intent?.dataString,usage,::requestDefaultBrowser,fullscreen) } }
     override fun onResume() { super.onResume(); if(::usage.isInitialized) usage.refresh() }
     override fun onDestroy() { if(::fullscreen.isInitialized) fullscreen.hide(); super.onDestroy() }
     private fun requestDefaultBrowser() {
@@ -98,8 +98,7 @@ class MainActivity:ComponentActivity() {
 @Composable private fun Browser(initialUrl:String?, usage:ProUsage, onSetDefault:()->Unit, fullscreen:FullscreenVideo) {
     val context=LocalContext.current
     val store=remember { Store(context) }
-    AdBlocker.initialize(context)
-    var adBlockEnabled by remember { mutableStateOf(store.prefs.getBoolean("adBlockEnabled",true)) }
+    var adBlockEnabled by remember { mutableStateOf(AdBlocker.isEnabled()) }
     val scope=rememberCoroutineScope()
     val focusManager=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
@@ -126,6 +125,21 @@ class MainActivity:ComponentActivity() {
         }.collect { serialized -> withContext(Dispatchers.IO) { store.prefs.edit().putString("session",serialized).commit() } }
     }
     val tab=tabs.firstOrNull { it.id==activeId } ?: tabs.first()
+    fun applyAdBlockSetting(enabled:Boolean) {
+        val changed = AdBlocker.isEnabled() != enabled
+        val saved = AdBlocker.setEnabled(context, enabled)
+        adBlockEnabled = AdBlocker.isEnabled()
+        if (changed && tab.url.isNotBlank()) {
+            tab.error = false
+            tab.web?.reload()
+        }
+        val message = when {
+            !saved -> t("Could not save ad blocker setting","ذخیره وضعیت مسدودکننده تبلیغات ناموفق بود")
+            enabled -> t("Ad blocker ON · page reloaded","مسدودکننده روشن شد؛ صفحه دوباره بارگیری شد")
+            else -> t("Ad blocker OFF · page reloaded","مسدودکننده خاموش شد؛ صفحه دوباره بارگیری شد")
+        }
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
     var screen by remember { mutableStateOf("browser") }
     var address by remember(tab.id) { mutableStateOf(tab.url) }
     var editing by remember { mutableStateOf(false) }
@@ -190,7 +204,7 @@ class MainActivity:ComponentActivity() {
                                 if(address.isNotEmpty() && editing) IconButton(onClick={address=""},modifier=Modifier.size(36.dp)) { Text("×",fontSize=22.sp) }
                             }
                         })
-                        IconButton(onClick={ adBlockEnabled=!adBlockEnabled; AdBlocker.setEnabled(context,adBlockEnabled) },modifier=Modifier.size(40.dp).semantics { contentDescription=if(adBlockEnabled) "Ad blocker enabled" else "Ad blocker disabled" }) { Text("🛡",fontSize=19.sp,color=if(adBlockEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+                        IconButton(onClick={ applyAdBlockSetting(!AdBlocker.isEnabled()) },modifier=Modifier.size(40.dp).semantics { contentDescription=if(adBlockEnabled) "Ad blocker enabled. Tap to disable and reload page." else "Ad blocker disabled. Tap to enable and reload page." }) { Text("🛡",fontSize=19.sp,color=if(adBlockEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                         IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(44.dp)) { Text("▦",fontSize=22.sp,color=MaterialTheme.colorScheme.primary) }
                         IconButton(onClick={screen="tabs"},modifier=Modifier.size(44.dp)) { BadgedBox(badge={ Badge { Text("${tabs.size}") } }) { Text("▣", fontSize=22.sp) } }
                         PlusOverflowMenu(usage,isFa,onOpen={keyboard?.hide();focusManager.clearFocus()},onAction={ action -> when(action) {"new"->addTab(false);"private"->addTab(true);else->screen=action} })
@@ -237,7 +251,7 @@ class MainActivity:ComponentActivity() {
                     when(screen) {
                         "search" -> PlusSearchScreen(searchQuery,{searchQuery=it},engine,onSearch={openUrl(it)},modifier=Modifier.weight(1f))
                         "downloads" -> DownloadsScreen()
-                        "pro" -> ProScreen(usage,proTheme,adBlockEnabled=adBlockEnabled,onAdBlockChange={ enabled -> adBlockEnabled=enabled;AdBlocker.setEnabled(context,enabled) },onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
+                        "pro" -> ProScreen(usage,proTheme,adBlockEnabled=adBlockEnabled,onAdBlockChange={ enabled -> applyAdBlockSetting(enabled) },onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
                             if(usage.unlocked) { scanAgent=tab.web?.settings?.userAgentString ?: "";scanPage(tab.web) { found,error -> scanItems=found;scanError=error;screen="detected" } }
                         },onDownloads={screen="downloads"},modifier=Modifier.weight(1f))
                         "detected" -> if(usage.unlocked) ScanResults(scanItems,scanError,scanAgent,onDownloads={screen="downloads"}) else Text("PLUS PRO+ is locked.",Modifier.padding(20.dp))
@@ -248,7 +262,7 @@ class MainActivity:ComponentActivity() {
                         "settings" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                             Text(t("APPEARANCE","ظاهر"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Dark theme","پوسته تیره"),modifier=Modifier.weight(1f)); Switch(checked=dark,onCheckedChange={dark=it;store.prefs.edit().putBoolean("dark",it).apply()}) }
                             Spacer(Modifier.height(22.dp)); Text(t("SEARCH ENGINE","موتور جستجو"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); listOf("Google","DuckDuckGo","Bing").forEach { name -> Row(Modifier.fillMaxWidth().clickable { engine=name;store.prefs.edit().putString("engine",name).apply() },verticalAlignment=Alignment.CenterVertically) { RadioButton(selected=engine==name,onClick={engine=name;store.prefs.edit().putString("engine",name).apply()}); Text(name) } }
-                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Block ads and trackers","مسدودسازی تبلیغات و ردیاب‌ها")); Text(t("Uses a maintained host filter list","با فهرست فیلتر به‌روز"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={adBlockEnabled=it;AdBlocker.setEnabled(context,it)}) }; Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
+                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Block ads and trackers","مسدودسازی تبلیغات و ردیاب‌ها")); Text(t("Uses a maintained host filter list","با فهرست فیلتر به‌روز"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={applyAdBlockSetting(it)}) }; Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
                             TextButton(onClick={history=emptyList();store.save("history",history)}) { Text(t("Clear browsing history","پاک کردن تاریخچه مرور")) }
                             TextButton(onClick={CookieManager.getInstance().removeAllCookies { scope.launch(Dispatchers.IO) { CookieManager.getInstance().flush() } };WebStorage.getInstance().deleteAllData();tabs.forEach { it.web?.clearCache(true) };Toast.makeText(context,"Site data cleared",Toast.LENGTH_SHORT).show()}) { Text(t("Clear cookies and site data","پاک کردن کوکی‌ها و داده‌های سایت")) }
                             Text(t("Private tabs omit PLUS history, but Android WebView shares cookies and site storage across tabs. Downloads and websites may still retain information.","زبانه‌های خصوصی در تاریخچه PLUS ذخیره نمی‌شوند، اما کوکی‌ها و داده‌های سایت در WebView مشترک هستند. دانلودها و وب‌سایت‌ها ممکن است اطلاعات را حفظ کنند."),fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
