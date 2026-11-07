@@ -37,6 +37,7 @@ object AdBlocker {
     private const val PREFS = "plus"
     private const val ENABLED_KEY = "adBlockEnabled"
     private const val UPDATED_KEY = "adBlockUpdatedAt"
+    private const val BLOCKED_COUNT_KEY = "adBlockBlockedCount"
     private const val LIST_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
     private const val REFRESH_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
@@ -44,7 +45,10 @@ object AdBlocker {
     private val blockedHosts = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile private var enabled = true
+    @Volatile private var proUnlocked = false
     @Volatile private var initialized = false
+    @Volatile private var appContext: Context? = null
+    @Volatile private var blockedTotal = 0L
 
     private val fallbackHosts = setOf(
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
@@ -62,8 +66,10 @@ object AdBlocker {
         synchronized(this) {
             if (initialized) return
             val app = context.applicationContext
-            enabled = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(ENABLED_KEY, true)
+            appContext = app
+            val preferences = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            enabled = preferences.getBoolean(ENABLED_KEY, true)
+            blockedTotal = preferences.getLong(BLOCKED_COUNT_KEY, 0L).coerceAtLeast(0L)
             blockedHosts.addAll(fallbackHosts)
             loadCachedList(app)
             initialized = true
@@ -88,8 +94,17 @@ object AdBlocker {
 
     fun isEnabled(): Boolean = enabled
 
+    /** Premium filtering is available only while PLUS PRO+ is unlocked. */
+    fun setProUnlocked(value: Boolean) {
+        proUnlocked = value
+    }
+
+    fun isProUnlocked(): Boolean = proUnlocked
+
+    fun blockedCount(): Long = blockedTotal
+
     fun shouldBlock(url: String): Boolean {
-        if (!enabled) return false
+        if (!enabled || !proUnlocked) return false
         val host = try {
             Uri.parse(url).host ?: return false
         } catch (_: Exception) {
@@ -98,8 +113,12 @@ object AdBlocker {
         return matchesBlockedHost(host, blockedHosts)
     }
 
-    fun intercept(request: WebResourceRequest): WebResourceResponse? {
+    fun intercept(request: WebResourceRequest, onBlocked: () -> Unit = {}): WebResourceResponse? {
         if (request.isForMainFrame || !shouldBlock(request.url.toString())) return null
+        val next = synchronized(this) { (blockedTotal + 1L).also { blockedTotal = it } }
+        appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            ?.edit()?.putLong(BLOCKED_COUNT_KEY, next)?.apply()
+        onBlocked()
         return WebResourceResponse(
             "text/plain",
             "utf-8",
