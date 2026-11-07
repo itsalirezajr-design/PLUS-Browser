@@ -103,7 +103,7 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
             if(usage.unlocked) proThemes.forEach { theme -> Row(Modifier.fillMaxWidth().clickable {onTheme(theme.name)}.padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) { Box(Modifier.size(22.dp).background(theme.background, RoundedCornerShape(6.dp)).border(2.dp,theme.primary,RoundedCornerShape(6.dp)));Spacer(Modifier.width(10.dp)); Text(theme.name,Modifier.weight(1f)); if(theme.name==themeName) Text("✓",color=gold) } }
         } }
         item { FeatureCard("05","PLUS DEEP FREEZE","Unavailable: safe hibernation of active media and critical page operations is not implemented.","UNAVAILABLE") {} }
-        item { FeatureCard("06","PLUS AD BLOCKER","Block known advertising and tracking domains while browsing. Some first-party or embedded ads may still appear.",if(adBlockEnabled) "ACTIVE" else "OFF") {
+        item { FeatureCard("06","PLUS AD BLOCKER","FREE for every user. No PLUS PRO+ unlock or paid subscription is required. Blocks known ad and tracker domains; some first-party or embedded ads may still appear.",if(adBlockEnabled) "FREE · ACTIVE" else "FREE · OFF") {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(adBlockEnabled) "Ad and tracker blocking is enabled" else "Ad and tracker blocking is disabled",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
                 Switch(checked=adBlockEnabled,onCheckedChange=onAdBlockChange)
