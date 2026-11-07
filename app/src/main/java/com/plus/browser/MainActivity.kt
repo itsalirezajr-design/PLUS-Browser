@@ -69,6 +69,8 @@ private class Tab(val id:Int, val privateMode:Boolean) {
     var error by mutableStateOf(false)
     var back by mutableStateOf(false)
     var forward by mutableStateOf(false)
+    var deepFrozen by mutableStateOf(false)
+    var savedWebState: Bundle? = null
 }
 private class Store(context:Context) {
     val prefs=context.getSharedPreferences("plus", Context.MODE_PRIVATE)
@@ -108,6 +110,7 @@ class MainActivity:ComponentActivity() {
     val focusManager=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
     var dark by remember { mutableStateOf(store.prefs.getBoolean("dark",true)) }
+    var deepFreezeEnabled by remember { mutableStateOf(context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).getBoolean("deep_freeze_enabled",false)) }
     var thirdParty by remember { mutableStateOf(store.prefs.getBoolean("thirdParty",false)) }
     var engine by remember { mutableStateOf(store.prefs.getString("engine","Google") ?: "Google") }
     val isFa=Locale.getDefault().language == "fa"
@@ -130,6 +133,20 @@ class MainActivity:ComponentActivity() {
         }.collect { serialized -> withContext(Dispatchers.IO) { store.prefs.edit().putString("session",serialized).commit() } }
     }
     val tab=tabs.firstOrNull { it.id==activeId } ?: tabs.first()
+    LaunchedEffect(activeId) { tab.deepFrozen=false }
+    LaunchedEffect(activeId,deepFreezeEnabled,usage.unlocked) {
+        val shouldFreeze=deepFreezeEnabled && usage.unlocked
+        tabs.filter { it.id!=activeId && !it.privateMode && !it.deepFrozen }.forEach { item ->
+            if(shouldFreeze) {
+                item.web?.let { view ->
+                    val state=Bundle()
+                    try { view.saveState(state); item.savedWebState=state } catch (_:Exception) { item.savedWebState=null }
+                }
+                item.deepFrozen=true
+            }
+        }
+        if(!shouldFreeze) tabs.forEach { it.deepFrozen=false }
+    }
     LaunchedEffect(usage.unlocked) {
         AdBlocker.setProUnlocked(usage.unlocked)
         adBlockEnabled = AdBlocker.isEnabled()
@@ -255,7 +272,7 @@ class MainActivity:ComponentActivity() {
                     PageProgress(tab)
                     Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
                         tabs.forEach { item -> key(item.id) {
-                            if(item.web!=null || (item.id==activeId && item.url.isNotBlank())) BrowserWebView(item, item.id==activeId && item.url.isNotBlank(), thirdParty, MaterialTheme.colorScheme.background.toArgb(), fullscreen, { url,title -> updateHistory(item,url,title) }, { blocked -> Handler(Looper.getMainLooper()).post { blockedAdCount=AdBlocker.blockedCount() } }, { url,agent,disposition,mime ->
+                            if(!item.deepFrozen && (item.web!=null || (item.id==activeId && item.url.isNotBlank()))) BrowserWebView(item, item.id==activeId && item.url.isNotBlank(), thirdParty, MaterialTheme.colorScheme.background.toArgb(), fullscreen, { url,title -> updateHistory(item,url,title) }, { blocked -> Handler(Looper.getMainLooper()).post { blockedAdCount=AdBlocker.blockedCount() } }, { url,agent,disposition,mime ->
                                 scope.launch(Dispatchers.IO) {
                                     try { Downloads.get(context).add(url,agent,disposition,mime,CookieManager.getInstance().getCookie(url)); withContext(Dispatchers.Main) { Toast.makeText(context,if(isFa) "دانلود آغاز شد" else "Download started",Toast.LENGTH_SHORT).show() } }
                                     catch(e:Exception) { withContext(Dispatchers.Main) { Toast.makeText(context,"Download failed: ${e.message}",Toast.LENGTH_LONG).show() } }
@@ -294,7 +311,12 @@ class MainActivity:ComponentActivity() {
                     when(screen) {
                         "search" -> PlusSearchScreen(searchQuery,{searchQuery=it},engine,onSearch={openUrl(it)},modifier=Modifier.weight(1f))
                         "downloads" -> DownloadsScreen()
-                        "pro" -> ProScreen(usage,proTheme,adBlockEnabled=adBlockEnabled,onAdBlockChange={ enabled -> applyAdBlockSetting(enabled) },onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
+                        "pro" -> ProScreen(usage,proTheme,adBlockEnabled=adBlockEnabled,deepFreezeEnabled=deepFreezeEnabled,onDeepFreezeChange={ enabled ->
+                            if(usage.unlocked) {
+                                deepFreezeEnabled=enabled
+                                context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putBoolean("deep_freeze_enabled",enabled).apply()
+                            }
+                        },onAdBlockChange={ enabled -> applyAdBlockSetting(enabled) },onSetDefault=onSetDefault,onTheme={ selected -> proTheme=selected;dark=true;store.prefs.edit().putBoolean("dark",true).apply();context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE).edit().putString("theme",selected).apply() },onScan={
                             if(usage.unlocked) { scanAgent=tab.web?.settings?.userAgentString ?: "";scanPage(tab.web) { found,error -> scanItems=found;scanError=error;screen="detected" } }
                         },onDownloads={screen="downloads"},modifier=Modifier.weight(1f))
                         "detected" -> if(usage.unlocked) ScanResults(scanItems,scanError,scanAgent,onDownloads={screen="downloads"}) else Text("PLUS PRO+ is locked.",Modifier.padding(20.dp))
@@ -421,7 +443,9 @@ private fun BrowserWebView(
                 override fun onReceivedTitle(view:WebView,title:String?) { tab.title=title ?: "" }
             }
             w.setDownloadListener { url,agent,disposition,mime,_ -> latestDownload(url,agent,disposition,mime) }
-            if(tab.url.isNotBlank()) w.loadUrl(tab.url)
+            val restored=try { tab.savedWebState?.let { w.restoreState(it)!=null } ?: false } catch (_:Exception) { false }
+            tab.savedWebState=null
+            if(!restored && tab.url.isNotBlank()) w.loadUrl(tab.url)
         }
     },update={ view ->
         view.setBackgroundColor(background)
