@@ -84,7 +84,7 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
                 Spacer(Modifier.height(14.dp))
                 if(usage.isDefault) Text("PRO+ UNLOCKED",color=gold,fontWeight=FontWeight.Bold)
                 else {
-                    Text("Make PLUS your default browser to unlock all five PRO+ features.",color=Color.White)
+                    Text("Make PLUS your default browser to unlock all PRO+ features.",color=Color.White)
                     if(usage.status==BrowserDefaultStatus.UNAVAILABLE) Text("Your device may not support a default browser role; check Android settings.",color=Color(0xffcbbca5),fontSize=12.sp,modifier=Modifier.padding(top=6.dp))
                     Spacer(Modifier.height(10.dp))
                     Button(onClick=onSetDefault,colors=ButtonDefaults.buttonColors(containerColor=gold,contentColor=Color(0xff171321))) { Text("SET AS DEFAULT BROWSER",fontWeight=FontWeight.Bold) }
