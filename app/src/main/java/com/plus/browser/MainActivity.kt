@@ -3,6 +3,8 @@ package com.plus.browser
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Build
 import android.app.role.RoleManager
 import android.provider.Settings
@@ -99,6 +101,8 @@ class MainActivity:ComponentActivity() {
     val context=LocalContext.current
     val store=remember { Store(context) }
     var adBlockEnabled by remember { mutableStateOf(AdBlocker.isEnabled()) }
+    var showAdBlockPopup by remember { mutableStateOf(false) }
+    var blockedAdCount by remember { mutableLongStateOf(AdBlocker.blockedCount()) }
     val scope=rememberCoroutineScope()
     val focusManager=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
@@ -125,7 +129,14 @@ class MainActivity:ComponentActivity() {
         }.collect { serialized -> withContext(Dispatchers.IO) { store.prefs.edit().putString("session",serialized).commit() } }
     }
     val tab=tabs.firstOrNull { it.id==activeId } ?: tabs.first()
+    LaunchedEffect(usage.unlocked) {
+        AdBlocker.setProUnlocked(usage.unlocked)
+        adBlockEnabled = AdBlocker.isEnabled()
+        blockedAdCount = AdBlocker.blockedCount()
+        if (!usage.unlocked && showAdBlockPopup) showAdBlockPopup = true
+    }
     fun applyAdBlockSetting(enabled:Boolean) {
+        if (!usage.unlocked) { showAdBlockPopup = false; screen = "pro"; return }
         val changed = AdBlocker.isEnabled() != enabled
         val saved = AdBlocker.setEnabled(context, enabled)
         adBlockEnabled = AdBlocker.isEnabled()
@@ -133,12 +144,7 @@ class MainActivity:ComponentActivity() {
             tab.error = false
             tab.web?.reload()
         }
-        val message = when {
-            !saved -> t("Could not save ad blocker setting","ذخیره وضعیت مسدودکننده تبلیغات ناموفق بود")
-            enabled -> t("Ad blocker ON · page reloaded","مسدودکننده روشن شد؛ صفحه دوباره بارگیری شد")
-            else -> t("Ad blocker OFF · page reloaded","مسدودکننده خاموش شد؛ صفحه دوباره بارگیری شد")
-        }
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        if (!saved) Toast.makeText(context, t("Could not save ad blocker setting","ذخیره وضعیت مسدودکننده تبلیغات ناموفق بود"), Toast.LENGTH_SHORT).show()
     }
     var screen by remember { mutableStateOf("browser") }
     var address by remember(tab.id) { mutableStateOf(tab.url) }
@@ -204,7 +210,44 @@ class MainActivity:ComponentActivity() {
                                 if(address.isNotEmpty() && editing) IconButton(onClick={address=""},modifier=Modifier.size(36.dp)) { Text("×",fontSize=22.sp) }
                             }
                         })
-                        IconButton(onClick={ applyAdBlockSetting(!AdBlocker.isEnabled()) },modifier=Modifier.size(40.dp).semantics { contentDescription=if(adBlockEnabled) "Ad blocker enabled. Tap to disable and reload page." else "Ad blocker disabled. Tap to enable and reload page." }) { Text("🛡",fontSize=19.sp,color=if(adBlockEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Box {
+                            IconButton(onClick={showAdBlockPopup=!showAdBlockPopup},modifier=Modifier.size(40.dp).semantics { contentDescription="Open PLUS ad blocker controls" }) {
+                                Text("🛡",fontSize=19.sp,color=if(usage.unlocked && adBlockEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(expanded=showAdBlockPopup,onDismissRequest={showAdBlockPopup=false},modifier=Modifier.width(276.dp).background(Color(0xff151d32))) {
+                                Column(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                                    Row(verticalAlignment=Alignment.CenterVertically) {
+                                        Text("🛡",fontSize=22.sp)
+                                        Spacer(Modifier.width(9.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text("PLUS AD BLOCKER",fontWeight=FontWeight.Bold,color=Color.White,fontSize=14.sp)
+                                            Text(if(usage.unlocked) t("PRO protection unlocked","محافظت حرفه‌ای فعال است") else t("PLUS PRO+ feature","قابلیت ویژه PLUS PRO+"),fontSize=11.sp,color=Color(0xffaab6d0))
+                                        }
+                                        Text(if(usage.unlocked && adBlockEnabled) "ON" else if(usage.unlocked) "OFF" else "LOCKED",fontSize=10.sp,fontWeight=FontWeight.Bold,color=if(usage.unlocked && adBlockEnabled) Color(0xff70ddb1) else Color(0xffffc66d))
+                                    }
+                                    HorizontalDivider(color=Color(0xff34415d))
+                                    Row(verticalAlignment=Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(t("Blocked ads & trackers","تبلیغات و ردیاب‌های مسدودشده"),fontSize=12.sp,color=Color(0xffd9e1f2))
+                                            Text(blockedAdCount.toString(),fontSize=25.sp,fontWeight=FontWeight.Bold,color=Color.White)
+                                        }
+                                        Text(if(isFa) "مورد" else "blocked",fontSize=11.sp,color=Color(0xff9eabc5))
+                                    }
+                                    if(usage.unlocked) {
+                                        Row(verticalAlignment=Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(t("Ad blocking","مسدودسازی تبلیغات"),color=Color.White,fontWeight=FontWeight.SemiBold)
+                                                Text(if(adBlockEnabled) t("Protection is active","محافظت روشن است") else t("Protection is paused","محافظت متوقف است"),fontSize=11.sp,color=Color(0xffaab6d0))
+                                            }
+                                            Switch(checked=adBlockEnabled,onCheckedChange={applyAdBlockSetting(it)})
+                                        }
+                                    } else {
+                                        Text(t("Unlock PLUS PRO+ to activate the advanced filter and block ads across supported pages.","برای فعال‌کردن فیلتر پیشرفته و مسدودسازی تبلیغات، PLUS PRO+ را باز کنید."),fontSize=12.sp,color=Color(0xffc4cde0))
+                                        Button(onClick={showAdBlockPopup=false;screen="pro"},modifier=Modifier.fillMaxWidth()) { Text(t("UNLOCK WITH PLUS PRO+","باز کردن با PLUS PRO+")) }
+                                    }
+                                }
+                            }
+                        }
                         IconButton(onClick={ qrLauncher.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(t("Scan a QR code","کد QR را اسکن کنید")).setBeepEnabled(false).setOrientationLocked(false)) },modifier=Modifier.size(44.dp)) { Text("▦",fontSize=22.sp,color=MaterialTheme.colorScheme.primary) }
                         IconButton(onClick={screen="tabs"},modifier=Modifier.size(44.dp)) { BadgedBox(badge={ Badge { Text("${tabs.size}") } }) { Text("▣", fontSize=22.sp) } }
                         PlusOverflowMenu(usage,isFa,onOpen={keyboard?.hide();focusManager.clearFocus()},onAction={ action -> when(action) {"new"->addTab(false);"private"->addTab(true);else->screen=action} })
@@ -212,7 +255,7 @@ class MainActivity:ComponentActivity() {
                     PageProgress(tab)
                     Box(Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
                         tabs.forEach { item -> key(item.id) {
-                            if(item.web!=null || (item.id==activeId && item.url.isNotBlank())) BrowserWebView(item, item.id==activeId && item.url.isNotBlank(), thirdParty, MaterialTheme.colorScheme.background.toArgb(), fullscreen, { url,title -> updateHistory(item,url,title) }, { url,agent,disposition,mime ->
+                            if(item.web!=null || (item.id==activeId && item.url.isNotBlank())) BrowserWebView(item, item.id==activeId && item.url.isNotBlank(), thirdParty, MaterialTheme.colorScheme.background.toArgb(), fullscreen, { url,title -> updateHistory(item,url,title) }, { blocked -> Handler(Looper.getMainLooper()).post { blockedAdCount=AdBlocker.blockedCount() } }, { url,agent,disposition,mime ->
                                 scope.launch(Dispatchers.IO) {
                                     try { Downloads.get(context).add(url,agent,disposition,mime,CookieManager.getInstance().getCookie(url)); withContext(Dispatchers.Main) { Toast.makeText(context,if(isFa) "دانلود آغاز شد" else "Download started",Toast.LENGTH_SHORT).show() } }
                                     catch(e:Exception) { withContext(Dispatchers.Main) { Toast.makeText(context,"Download failed: ${e.message}",Toast.LENGTH_LONG).show() } }
@@ -262,7 +305,7 @@ class MainActivity:ComponentActivity() {
                         "settings" -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                             Text(t("APPEARANCE","ظاهر"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(t("Dark theme","پوسته تیره"),modifier=Modifier.weight(1f)); Switch(checked=dark,onCheckedChange={dark=it;store.prefs.edit().putBoolean("dark",it).apply()}) }
                             Spacer(Modifier.height(22.dp)); Text(t("SEARCH ENGINE","موتور جستجو"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); listOf("Google","DuckDuckGo","Bing").forEach { name -> Row(Modifier.fillMaxWidth().clickable { engine=name;store.prefs.edit().putString("engine",name).apply() },verticalAlignment=Alignment.CenterVertically) { RadioButton(selected=engine==name,onClick={engine=name;store.prefs.edit().putString("engine",name).apply()}); Text(name) } }
-                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Block ads and trackers","مسدودسازی تبلیغات و ردیاب‌ها")); Text(t("Uses a maintained host filter list","با فهرست فیلتر به‌روز"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={applyAdBlockSetting(it)}) }; Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
+                            Spacer(Modifier.height(22.dp)); Text(t("PRIVACY","حریم خصوصی"),color=MaterialTheme.colorScheme.secondary,fontSize=12.sp,letterSpacing=1.sp); Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("PLUS advanced ad blocker","مسدودکننده پیشرفته PLUS")); Text(if(usage.unlocked) t("PRO host filter protection","محافظت حرفه‌ای با فهرست دامنه‌ها") else t("Locked · requires PLUS PRO+","قفل · نیازمند PLUS PRO+"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=adBlockEnabled,onCheckedChange={applyAdBlockSetting(it)},enabled=usage.unlocked) }; if(!usage.unlocked) TextButton(onClick={screen="pro"}) { Text(t("Unlock PLUS PRO+","باز کردن PLUS PRO+")) }; Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(t("Allow third-party cookies","اجازه کوکی‌های شخص ثالث")); Text(t("Off by default", "به طور پیش‌فرض خاموش"),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }; Switch(checked=thirdParty,onCheckedChange={thirdParty=it;store.prefs.edit().putBoolean("thirdParty",it).apply()}) }
                             TextButton(onClick={history=emptyList();store.save("history",history)}) { Text(t("Clear browsing history","پاک کردن تاریخچه مرور")) }
                             TextButton(onClick={CookieManager.getInstance().removeAllCookies { scope.launch(Dispatchers.IO) { CookieManager.getInstance().flush() } };WebStorage.getInstance().deleteAllData();tabs.forEach { it.web?.clearCache(true) };Toast.makeText(context,"Site data cleared",Toast.LENGTH_SHORT).show()}) { Text(t("Clear cookies and site data","پاک کردن کوکی‌ها و داده‌های سایت")) }
                             Text(t("Private tabs omit PLUS history, but Android WebView shares cookies and site storage across tabs. Downloads and websites may still retain information.","زبانه‌های خصوصی در تاریخچه PLUS ذخیره نمی‌شوند، اما کوکی‌ها و داده‌های سایت در WebView مشترک هستند. دانلودها و وب‌سایت‌ها ممکن است اطلاعات را حفظ کنند."),fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -321,11 +364,13 @@ private fun BrowserWebView(
     background: Int,
     fullscreen: FullscreenVideo,
     onVisit: (String, String) -> Unit,
+    onBlockedCountChanged: (Boolean) -> Unit,
     onDownload: (String, String?, String?, String?) -> Unit
 ) {
     val context=LocalContext.current
     val latestVisible by rememberUpdatedState(visible)
     val latestVisit by rememberUpdatedState(onVisit)
+    val latestBlocked by rememberUpdatedState(onBlockedCountChanged)
     val latestDownload by rememberUpdatedState(onDownload)
     DisposableEffect(tab) {
         onDispose {
@@ -358,7 +403,7 @@ private fun BrowserWebView(
                     catch(_:Exception) { Toast.makeText(context,"No app can open this link",Toast.LENGTH_SHORT).show(); true }
                 }
                 override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse? {
-                    return AdBlocker.intercept(request) ?: super.shouldInterceptRequest(view,request)
+                    return AdBlocker.intercept(request) { latestBlocked(true) } ?: super.shouldInterceptRequest(view,request)
                 }
                 override fun onPageStarted(view:WebView,url:String?,favicon:android.graphics.Bitmap?) {
                     tab.error=false; tab.url=url ?: ""; tab.back=view.canGoBack(); tab.forward=view.canGoForward()
