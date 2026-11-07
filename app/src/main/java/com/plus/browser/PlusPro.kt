@@ -67,7 +67,7 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
     }
 }
 
-@Composable internal fun ProScreen(usage:ProUsage,themeName:String,adBlockEnabled:Boolean,onAdBlockChange:(Boolean)->Unit,onSetDefault:()->Unit,onTheme:(String)->Unit,onScan:()->Unit,onDownloads:()->Unit, modifier:Modifier=Modifier) {
+@Composable internal fun ProScreen(usage:ProUsage,themeName:String,adBlockEnabled:Boolean,deepFreezeEnabled:Boolean,onDeepFreezeChange:(Boolean)->Unit,onAdBlockChange:(Boolean)->Unit,onSetDefault:()->Unit,onTheme:(String)->Unit,onScan:()->Unit,onDownloads:()->Unit, modifier:Modifier=Modifier) {
     val context=androidx.compose.ui.platform.LocalContext.current
     val prefs=remember {context.getSharedPreferences("plus_pro",Context.MODE_PRIVATE)}
     val gold=Color(0xffe9ca85)
@@ -97,13 +97,17 @@ internal fun scanPage(web:WebView?,result:(List<ScanItem>,String?)->Unit) {
             Button(onClick=onScan,enabled=usage.unlocked) {Text("SCAN PAGE FOR DOWNLOADS")}; TextButton(onClick=onDownloads) {Text("Open Downloads")}
             if(usage.unlocked) { Text("Simultaneous downloads: $maxDownloads",fontSize=13.sp);Row { (1..4).forEach { n-> TextButton(onClick={maxDownloads=n;prefs.edit().putInt("max_downloads",n).apply()}) {Text(if(n==maxDownloads) "[$n]" else "$n")} } } }
         } }
-        item { FeatureCard("02","PLUS AI","Unavailable: no on-device model is installed or integrated. No simulated answers are provided.","UNAVAILABLE") {} }
-        item { FeatureCard("03","PLUS VAULT","Unavailable: secure vault and biometric protection are not implemented. Do not store sensitive content here.","UNAVAILABLE") {} }
-        item { FeatureCard("04","PLUS BUTTER THEMES","Six persistent, PLUS-inspired interface palettes.",if(usage.unlocked) "ACTIVE" else "LOCKED") {
+        item { FeatureCard("02","PLUS BUTTER THEMES","Six persistent, PLUS-inspired interface palettes.",if(usage.unlocked) "ACTIVE" else "LOCKED") {
             if(usage.unlocked) proThemes.forEach { theme -> Row(Modifier.fillMaxWidth().clickable {onTheme(theme.name)}.padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically) { Box(Modifier.size(22.dp).background(theme.background, RoundedCornerShape(6.dp)).border(2.dp,theme.primary,RoundedCornerShape(6.dp)));Spacer(Modifier.width(10.dp)); Text(theme.name,Modifier.weight(1f)); if(theme.name==themeName) Text("✓",color=gold) } }
         } }
-        item { FeatureCard("05","PLUS DEEP FREEZE","Unavailable: safe hibernation of active media and critical page operations is not implemented.","UNAVAILABLE") {} }
-        item { FeatureCard("06","PLUS PRO+ ADVANCED AD BLOCKER","Advanced ad and tracker filtering with an expanded host list. This protection is reserved for PLUS PRO+ and remains locked until PLUS is your default browser.",if(!usage.unlocked) "LOCKED" else if(adBlockEnabled) "ACTIVE" else "OFF") {
+        item { FeatureCard("03","PLUS DEEP FREEZE","Hibernate inactive normal tabs to release their WebView renderer memory. The active tab stays live; frozen tabs restore saved page state when reopened.",if(!usage.unlocked) "LOCKED" else if(deepFreezeEnabled) "ON" else "OFF") {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(if(deepFreezeEnabled) "Inactive tabs are hibernated" else "Keep inactive tabs ready in memory",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
+                Switch(checked=deepFreezeEnabled,onCheckedChange=onDeepFreezeChange,enabled=usage.unlocked)
+            }
+            if(!usage.unlocked) Text("Set PLUS as your default browser to unlock Deep Freeze.",fontSize=12.sp,color=Color(0xffc5c7d2))
+        } }
+        item { FeatureCard("04","PLUS PRO+ ADVANCED AD BLOCKER","Advanced ad and tracker filtering with an expanded host list. This protection is reserved for PLUS PRO+ and remains locked until PLUS is your default browser.",if(!usage.unlocked) "LOCKED" else if(adBlockEnabled) "ACTIVE" else "OFF") {
             if(usage.unlocked) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     Text(if(adBlockEnabled) "Advanced protection is enabled" else "Advanced protection is disabled",Modifier.weight(1f),fontSize=13.sp,color=Color(0xffc5c7d2))
