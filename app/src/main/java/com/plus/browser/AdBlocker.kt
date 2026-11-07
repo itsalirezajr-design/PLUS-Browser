@@ -16,6 +16,9 @@ import java.util.concurrent.Executors
  * Returns true only when the host is an exact blocked domain or its subdomain.
  * Kept independent of Android APIs so the matching rules can be unit-tested.
  */
+internal fun canApplyAdvancedAdBlock(enabled: Boolean, proUnlocked: Boolean): Boolean =
+    enabled && proUnlocked
+
 internal fun matchesBlockedHost(hostValue: String, blockedHosts: Set<String>): Boolean {
     val host = hostValue.trim().trimEnd('.').lowercase(Locale.ROOT)
     if (host.isBlank()) return false
@@ -104,7 +107,7 @@ object AdBlocker {
     fun blockedCount(): Long = blockedTotal
 
     fun shouldBlock(url: String): Boolean {
-        if (!enabled || !proUnlocked) return false
+        if (!canApplyAdvancedAdBlock(enabled, proUnlocked)) return false
         val host = try {
             Uri.parse(url).host ?: return false
         } catch (_: Exception) {
