@@ -103,6 +103,7 @@ class MainActivity:ComponentActivity() {
     var adBlockEnabled by remember { mutableStateOf(AdBlocker.isEnabled()) }
     var showAdBlockPopup by remember { mutableStateOf(false) }
     var blockedAdCount by remember { mutableLongStateOf(AdBlocker.blockedCount()) }
+    var screen by remember { mutableStateOf("browser") }
     val scope=rememberCoroutineScope()
     val focusManager=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
@@ -146,7 +147,6 @@ class MainActivity:ComponentActivity() {
         }
         if (!saved) Toast.makeText(context, t("Could not save ad blocker setting","ذخیره وضعیت مسدودکننده تبلیغات ناموفق بود"), Toast.LENGTH_SHORT).show()
     }
-    var screen by remember { mutableStateOf("browser") }
     var address by remember(tab.id) { mutableStateOf(tab.url) }
     var editing by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(store.get("bookmarks")) }
