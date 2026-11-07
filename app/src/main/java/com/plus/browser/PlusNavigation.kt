@@ -76,7 +76,7 @@ private val MenuMuted=Color(0xffa6b0ca)
             Column(Modifier.weight(1f)) {
                 Text("PLUS PRO+",color=Gold,fontWeight=FontWeight.Bold,fontSize=16.sp,letterSpacing=.5.sp)
                 Text(if(isFa) "قدرت بیشتر. آزادی بیشتر." else "More Power. More Freedom.",color=Color(0xffe5dfd0),fontSize=12.sp)
-                Text(if(isFa) "پنج قابلیت قدرتمند مرورگر را کشف کنید." else "Discover five powerful browser features.",color=MenuMuted,fontSize=11.sp)
+                Text(if(isFa) "پنج قابلیت قدرتمند مرورگر را کشف کنید." else "Discover four powerful browser features.",color=MenuMuted,fontSize=11.sp)
                 Spacer(Modifier.height(6.dp)); ProStatusText(usage,isFa,Gold)
             }
             Text("›",color=Gold,fontSize=24.sp)
